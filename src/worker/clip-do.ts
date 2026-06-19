@@ -107,6 +107,10 @@ export class ClipDO extends DurableObject<Env> {
       await this.burn();
       return { exists: false };
     }
+    if (row.reveal_budget >= 0 && row.reveals_used >= row.reveal_budget) {
+      await this.burn();
+      return { exists: false };
+    }
     const revealsRemaining =
       row.reveal_budget < 0 ? null : Math.max(0, row.reveal_budget - row.reveals_used);
     return {
@@ -149,6 +153,14 @@ export class ClipDO extends DurableObject<Env> {
       await this.ctx.storage.deleteAlarm();
     } catch {
       // no alarm scheduled
+    }
+    // Explicitly clear the SQL row. storage.deleteAll() does not reliably drop
+    // SQLite table rows across runtimes (it did in the Vitest pool but not in
+    // the dev runtime), so this DELETE is the load-bearing step of a burn.
+    try {
+      this.ctx.storage.sql.exec("DELETE FROM clip");
+    } catch {
+      // table already gone
     }
     await this.ctx.storage.deleteAll();
   }
