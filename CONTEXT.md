@@ -36,12 +36,17 @@ _Avoid_: views, reads, "number of users".
 The category of a Clip's content (text, code, image, file) that drives how it renders. Inferred client-side at create time and stored in the Clip's encrypted metadata, so the server never learns it.
 _Avoid_: type, format, mime (reserve "Kind" for this four-way category).
 
+**PIN**:
+An optional 4-digit numeric second factor for a Clip, shared out-of-band by the sharer. Gates server-side release of the content blob and is folded into the content key. Distinct from the Fragment Key.
+_Avoid_: password, passcode, code (reserve "PIN" for this 4-digit factor).
+
 ## Relationships
 
 - A **Clip** is encrypted client-side; the server stores only its ciphertext.
 - A **Link** references exactly one **Clip** and carries that Clip's **Fragment Key**.
 - Possession of a **Link** (path id + **Fragment Key**) is the secret required to decrypt a **Clip**. Any further gating (expiry, PIN, approval) controls *release of the ciphertext*, not decryption.
 - A **Clip** is destroyed by **Burn**, triggered by TTL expiry or by its **Reveal budget** reaching zero. Each **Reveal** decrements the budget.
+- A **Clip** may carry an optional **PIN**. Releasing its content then requires the correct **PIN** (verified server-side) in addition to the **Fragment Key** (which decrypts). Wrong **PIN** attempts trigger lockout, never **Burn**.
 
 ## Example dialogue
 
