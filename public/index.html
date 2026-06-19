@@ -1,11 +1,95 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Poof</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
-  <div id="app">Poof (scaffold placeholder, UI lands in POOF-5/POOF-6).</div>
+  <main class="shell">
+    <header class="masthead">
+      <a class="wordmark" href="/">poof<span class="dot">.</span></a>
+      <p class="kicker">zero-knowledge ephemeral clipboard</p>
+    </header>
+
+    <!-- CREATE -->
+    <section id="create-page" class="page" hidden>
+      <div id="composer" class="panel">
+        <p class="panel-kicker">// new clip</p>
+        <div id="dropzone" class="dropzone">
+          <textarea id="text" class="text" placeholder="Paste text or code, drop a file, or paste an image..." spellcheck="false"></textarea>
+          <div class="dz-foot">
+            <label class="file-btn">choose file<input id="file" type="file" hidden /></label>
+            <span id="kind" class="kind" data-testid="kind"></span>
+          </div>
+        </div>
+
+        <div class="options">
+          <label>burns after
+            <select id="ttl">
+              <option value="300000" selected>5 minutes</option>
+              <option value="3600000">1 hour</option>
+              <option value="86400000">1 day</option>
+              <option value="604800000">7 days</option>
+            </select>
+          </label>
+          <label>or after
+            <select id="budget">
+              <option value="1" selected>1 reveal</option>
+              <option value="3">3 reveals</option>
+              <option value="10">10 reveals</option>
+              <option value="-1">unlimited reveals</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="ts-widget" class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="dark"></div>
+
+        <button id="create-btn" class="btn primary" data-testid="create-btn" disabled>Create link</button>
+        <p id="create-error" class="error" hidden></p>
+      </div>
+
+      <div id="result" class="panel result" hidden>
+        <p class="panel-kicker">// your link</p>
+        <div class="link-row">
+          <input id="link" class="link" data-testid="link" readonly />
+          <button id="copy-link" class="btn" data-testid="copy-link">copy</button>
+        </div>
+        <p class="honesty">Anyone with this link can decrypt the clip. We never see its contents, and we cannot recover it. Lose the link and it is gone.</p>
+        <details class="advanced">
+          <summary>advanced</summary>
+          <p class="muted">Delete-now (owner token) lands in POOF-9.</p>
+        </details>
+        <button id="new-clip" class="btn ghost">new clip</button>
+      </div>
+    </section>
+
+    <!-- REVEAL -->
+    <section id="reveal-page" class="page" hidden>
+      <div id="precard" class="panel" hidden>
+        <p class="panel-kicker">// you have a clip</p>
+        <div class="pc-row"><span id="pc-kind" class="badge" data-testid="pc-kind"></span><span id="pc-detail" class="muted" data-testid="pc-detail"></span></div>
+        <p id="pc-reveals" class="muted" data-testid="pc-reveals"></p>
+        <p class="honesty">Revealing may consume the only copy. The metadata above was decrypted in your browser without spending a reveal.</p>
+        <button id="reveal-btn" class="btn primary" data-testid="reveal-btn">Reveal</button>
+        <p id="precard-info" class="error" hidden></p>
+      </div>
+
+      <div id="revealed" class="panel" hidden>
+        <p class="panel-kicker">// revealed</p>
+        <div id="content" class="content" data-testid="content"></div>
+      </div>
+
+      <div id="gone" class="panel gone" hidden data-testid="gone">
+        <p class="poof">poof.</p>
+        <p class="muted">This clip is gone, expired, burned, or never existed.</p>
+        <a class="btn ghost" href="/">make one</a>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

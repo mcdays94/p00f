@@ -51,7 +51,13 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   const ttlMs = clampTtl(Number(form.get("ttlMs")));
   const revealBudget = clampBudget(Number(form.get("revealBudget")));
 
-  const id = generateClipId();
+  // The client generates the id so it can salt the key derivation with it
+  // before uploading (ADR-0009). Fall back to a server id if absent (tests).
+  const provided = form.get("id");
+  const id =
+    typeof provided === "string" && /^[A-Za-z0-9_-]{16,64}$/.test(provided)
+      ? provided
+      : generateClipId();
   const metadata = new Uint8Array(await meta.arrayBuffer());
   const contentBytes = new Uint8Array(await content.arrayBuffer());
 
