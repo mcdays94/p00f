@@ -20,11 +20,24 @@ _Avoid_: password, secret, token (all overloaded; the PIN is a separate concept)
 The property that the server (and therefore Cloudflare, and anyone who breaches storage) only ever holds ciphertext for a Clip. It is a confidentiality guarantee, not an access-control mechanism.
 _Avoid_: using "secure" as a synonym; secure conflates confidentiality with access control.
 
+**Reveal**:
+The explicit user action (clicking "Reveal") that causes the server to release a Clip's ciphertext to the browser. The only event counted against the reveal budget.
+_Avoid_: view, open, read (use Reveal for the budget-consuming action specifically).
+
+**Burn**:
+Permanent destruction of a Clip's ciphertext, triggered when its TTL expires or its reveal budget reaches zero, whichever comes first.
+_Avoid_: delete, expire (Burn covers both triggers).
+
+**Reveal budget**:
+The number of times a Clip may be revealed before it burns. Default 1. Counts Reveals (ciphertext releases), not distinct users.
+_Avoid_: views, reads, "number of users".
+
 ## Relationships
 
 - A **Clip** is encrypted client-side; the server stores only its ciphertext.
 - A **Link** references exactly one **Clip** and carries that Clip's **Fragment Key**.
 - Possession of a **Link** (path id + **Fragment Key**) is the secret required to decrypt a **Clip**. Any further gating (expiry, PIN, approval) controls *release of the ciphertext*, not decryption.
+- A **Clip** is destroyed by **Burn**, triggered by TTL expiry or by its **Reveal budget** reaching zero. Each **Reveal** decrements the budget.
 
 ## Example dialogue
 
@@ -37,3 +50,4 @@ _Avoid_: using "secure" as a synonym; secure conflates confidentiality with acce
 
 - "paste" / "clipboard" were used loosely for the shared unit. Resolved: the canonical term is **Clip**.
 - "secure" was used to mean confidentiality. Resolved: we mean **Zero-Knowledge** (server holds only ciphertext). Access control (expiry/PIN/approval) is tracked separately and is not "security" in the confidentiality sense.
+- "read by X users" was used for the burn limit. Resolved: with no identity to dedupe on, we count **Reveals** (ciphertext releases), not users. The canonical term is **Reveal budget** and the UI says "reveals," never "users."
