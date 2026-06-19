@@ -40,6 +40,10 @@ _Avoid_: type, format, mime (reserve "Kind" for this four-way category).
 An optional 4-digit numeric second factor for a Clip, shared out-of-band by the sharer. Gates server-side release of the content blob and is folded into the content key. Distinct from the Fragment Key.
 _Avoid_: password, passcode, code (reserve "PIN" for this 4-digit factor).
 
+**Owner token**:
+A high-entropy secret returned to the creator once at create time, never part of the Link, that authorizes an early Burn of their own Clip. Distinct from the Fragment Key and the PIN.
+_Avoid_: admin key, management password, delete key.
+
 ## Relationships
 
 - A **Clip** is encrypted client-side; the server stores only its ciphertext.
@@ -47,6 +51,7 @@ _Avoid_: password, passcode, code (reserve "PIN" for this 4-digit factor).
 - Possession of a **Link** (path id + **Fragment Key**) is the secret required to decrypt a **Clip**. Any further gating (expiry, PIN, approval) controls *release of the ciphertext*, not decryption.
 - A **Clip** is destroyed by **Burn**, triggered by TTL expiry or by its **Reveal budget** reaching zero. Each **Reveal** decrements the budget.
 - A **Clip** may carry an optional **PIN**. Releasing its content then requires the correct **PIN** (verified server-side) in addition to the **Fragment Key** (which decrypts). Wrong **PIN** attempts trigger lockout, never **Burn**.
+- Only the holder of a Clip's **Owner token** can **Burn** it early. The token is never carried in the **Link**, so a link-holder cannot destroy the Clip.
 
 ## Example dialogue
 
