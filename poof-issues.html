@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Poof - Issues</title>
+<style>
+  :root {
+    --primary:#17171c; --ink:#212121; --deep-green:#003c33; --canvas:#ffffff;
+    --soft-stone:#eeece7; --pale-green:#edfce9; --pale-blue:#f1f5ff; --hairline:#d9d9dd;
+    --card-border:#ececef; --muted:#93939f; --slate:#75758a; --body-muted:#616161;
+    --action-blue:#1863dc; --coral:#ff7759; --error:#b30000; --on-dark:#ffffff;
+    --bg:var(--canvas); --surface:#fbfbfa; --text:var(--ink); --sub:var(--body-muted); --line:var(--hairline);
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  html[data-theme="dark"]{
+    --bg:#0d0f10; --surface:#15171a; --text:#f3f4f3; --sub:#9aa0a0; --line:#262a2d;
+    --card-border:#262a2d; --soft-stone:#1c1f22;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 96px;}
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:8px;}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--coral);margin:0 0 6px;}
+  h1{font-size:40px;letter-spacing:-.02em;margin:0;font-weight:600;}
+  .lede{color:var(--sub);margin:10px 0 0;max-width:60ch;}
+  .prd{display:inline-flex;gap:8px;align-items:center;margin-top:14px;font-family:var(--mono);font-size:13px;color:var(--action-blue);text-decoration:none;border:1px dashed var(--line);padding:6px 12px;border-radius:8px;}
+  .toggle{font-family:var(--mono);font-size:12px;color:var(--sub);background:none;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;}
+  .stats{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 28px;}
+  .stat{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--sub);}
+  .stat b{color:var(--text);}
+  .grid{display:grid;gap:14px;}
+  .issue{border:1px solid var(--card-border);border-radius:16px;background:var(--surface);padding:18px 20px;transition:border-color .15s;}
+  .issue:hover{border-color:var(--coral);}
+  .issue .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .id{font-family:var(--mono);font-size:12px;color:var(--slate);}
+  .issue h3{margin:0;font-size:18px;font-weight:600;flex:1;min-width:240px;letter-spacing:-.01em;}
+  .badge{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px solid transparent;white-space:nowrap;}
+  .b-ready{color:var(--action-blue);background:var(--pale-blue);}
+  .b-progress{color:#9a3a23;background:#ffe9e2;}
+  .b-done{color:var(--deep-green);background:var(--pale-green);}
+  .b-blocked{color:var(--error);background:#fde7e7;}
+  .b-triage,.b-wontfix{color:var(--slate);background:var(--soft-stone);}
+  html[data-theme="dark"] .b-ready{background:#11233f;} html[data-theme="dark"] .b-progress{background:#3a1f17;color:#ffb59f;}
+  html[data-theme="dark"] .b-done{background:#0f261f;color:#7fd4b9;} html[data-theme="dark"] .b-blocked{background:#341414;color:#ff9a9a;}
+  .prio{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .body{color:var(--sub);margin:12px 0 0;font-size:14.5px;}
+  .slice{font-family:var(--mono);font-size:11px;color:var(--coral);letter-spacing:.06em;text-transform:uppercase;margin-top:12px;}
+  .acc{margin:10px 0 0;padding:0;list-style:none;}
+  .acc li{font-size:13.5px;color:var(--sub);padding-left:20px;position:relative;margin:4px 0;}
+  .acc li::before{content:"";position:absolute;left:2px;top:8px;width:6px;height:6px;border-radius:2px;background:var(--coral);}
+  .dep{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:10px;}
+  footer{margin-top:40px;color:var(--muted);font-family:var(--mono);font-size:12px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="kicker">Poof / Issue Board</p>
+      <h1>Issues</h1>
+      <p class="lede">Local source of truth for Poof's build. Zero-knowledge, ephemeral clipboard sharing on Cloudflare Workers and Durable Objects.</p>
+      <a class="prd" href="docs/prd/0001-poof.md">PRD 0001 - Poof v1 (local MVP)</a>
+    </div>
+    <button class="toggle" onclick="toggleTheme()">theme</button>
+  </header>
+  <div class="stats" id="stats"></div>
+  <div class="grid" id="grid"></div>
+  <footer>Edit only the JSON in #poof-issues. The board rebuilds on load. See AGENTS.md.</footer>
+</div>
+
+<script type="application/json" id="poof-issues">
+[
+  {"id":"POOF-1","title":"Project scaffold + crypto ADR","slice":"foundation","status":"ready-for-agent","priority":"high","depends_on":[],"body":"Wrangler + Vite + vitest project. SQLite-backed DO binding, R2 binding, static assets. Record cryptographic primitives as ADR-0009.","acceptance":["wrangler.jsonc with ClipDO (new_sqlite_classes) + R2 + assets","vitest with @cloudflare/vitest-pool-workers runs","ADR-0009 documents AES-GCM-256, HKDF hierarchy, PIN/owner hashing"]},
+  {"id":"POOF-2","title":"crypto module + tests","slice":"crypto","status":"ready-for-agent","priority":"high","depends_on":["POOF-1"],"body":"Shared crypto: master key gen, HKDF (metadata key = fragment; content key = fragment + PIN), AES-GCM encrypt/decrypt, fragment-key URL encode/decode.","acceptance":["round-trip encrypt/decrypt for each Kind","wrong key fails to decrypt","PIN changes content key but not metadata key","unit tests green"]},
+  {"id":"POOF-3","title":"ClipDO core: store, metadata, reveal+budget, TTL burn","slice":"durable-object","status":"ready-for-agent","priority":"high","depends_on":["POOF-2"],"body":"ClipDO holds two blobs, reveal budget, TTL alarm. Metadata fetch does not consume budget; reveal decrements atomically and burns at zero; alarm burns on TTL.","acceptance":["metadata fetch is non-consuming","reveal decrements; burns at 0","TTL alarm deletes storage","tests under workers pool green"]},
+  {"id":"POOF-4","title":"Worker API + Turnstile verify","slice":"api","status":"ready-for-agent","priority":"high","depends_on":["POOF-3"],"body":"Router: POST /api/clip (create, verify Turnstile), GET /api/clip/:id/meta, POST /api/clip/:id/reveal, POST /api/clip/:id/delete. Unguessable ids.","acceptance":["create rejects missing/invalid Turnstile token","meta + reveal + delete wired to ClipDO","integration tests green"]},
+  {"id":"POOF-5","title":"Create flow UI","slice":"client","status":"ready-for-agent","priority":"high","depends_on":["POOF-4"],"body":"Unified paste/drop input infers Kind; encrypt client-side; upload ciphertext + Turnstile token; show Link + copy; advanced disclosure with delete-now.","acceptance":["paste text/code, paste image, drop file all work","Link contains fragment key after #","fragment never sent to server (verified)"]},
+  {"id":"POOF-6","title":"Reveal flow UI","slice":"client","status":"ready-for-agent","priority":"high","depends_on":["POOF-4"],"body":"Landing page decrypts metadata for the pre-reveal card (no budget spent); explicit Reveal fetches + decrypts content; render by Kind with copy/download; session-cache to avoid refresh double-spend.","acceptance":["pre-reveal card shows Kind/size/reveals-left","Reveal renders by Kind","refresh does not spend another reveal"]},
+  {"id":"POOF-7","title":"PIN: gate + key-derivation + lockout","slice":"security","status":"ready-for-agent","priority":"high","depends_on":["POOF-4","POOF-6"],"body":"Optional 4-digit PIN. DO stores salted slow hash, gates content release, locks out after threshold. Content key = derive(fragment + PIN); metadata key unchanged. Turnstile before each attempt.","acceptance":["correct PIN reveals","wrong PIN rejected; lockout after threshold","metadata card still renders without PIN"]},
+  {"id":"POOF-8","title":"R2 path for large content","slice":"storage","status":"ready-for-agent","priority":"medium","depends_on":["POOF-3"],"body":"Content > ~1MB stored as ciphertext in R2; DO holds key, proxies bytes on reveal; burn deletes the R2 object. 10MB cap enforced.","acceptance":["small content stays inline","large content round-trips via R2","burn removes R2 object","over-cap rejected"]},
+  {"id":"POOF-9","title":"Owner token delete-now","slice":"security","status":"ready-for-agent","priority":"medium","depends_on":["POOF-4","POOF-5"],"body":"High-entropy owner token returned once at create, hashed in DO, never in the Link. Hidden advanced affordance burns the Clip immediately.","acceptance":["token authorizes burn","link-holder without token cannot burn","affordance is hidden/advanced"]},
+  {"id":"POOF-10","title":"Product DESIGN.md (Workers + Raycast) + styling","slice":"design","status":"ready-for-agent","priority":"medium","depends_on":["POOF-5","POOF-6"],"body":"Author DESIGN.md: Workers Design System structure (mono kickers, dot-grid, corner brackets, dashed hovers) with Raycast palette (dark-first, near-black surfaces, coral accent). Lint with design.md. Apply to create + reveal screens.","acceptance":["DESIGN.md lints clean","create + reveal screens styled from tokens","dark-first with coral accent"]},
+  {"id":"POOF-11","title":"Playwright visual + flow validation","slice":"qa","status":"ready-for-agent","priority":"medium","depends_on":["POOF-5","POOF-6","POOF-10"],"body":"Drive create -> link -> reveal end to end in a real browser; screenshot create + pre-reveal + revealed states; assert no fragment in network requests.","acceptance":["e2e create/reveal passes headless","screenshots captured for review","no fragment key in any request URL/body"]}
+]
+</script>
+
+<script>
+  function toggleTheme(){const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';}
+  const BADGE={'ready-for-agent':'b-ready','in-progress':'b-progress','done':'b-done','blocked':'b-blocked','needs-triage':'b-triage','wontfix':'b-wontfix'};
+  function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+  function render(){
+    const data=JSON.parse(document.getElementById('poof-issues').textContent);
+    const counts={};data.forEach(i=>counts[i.status]=(counts[i.status]||0)+1);
+    const order=['done','in-progress','ready-for-agent','blocked','needs-triage','wontfix'];
+    document.getElementById('stats').innerHTML=
+      `<span class="stat"><b>${data.length}</b> issues</span>`+
+      order.filter(s=>counts[s]).map(s=>`<span class="stat"><b>${counts[s]}</b> ${s}</span>`).join('');
+    document.getElementById('grid').innerHTML=data.map(i=>`
+      <article class="issue">
+        <div class="top">
+          <span class="id">${esc(i.id)}</span>
+          <h3>${esc(i.title)}</h3>
+          <span class="badge ${BADGE[i.status]||'b-triage'}">${esc(i.status)}</span>
+          <span class="prio">${esc(i.priority)}</span>
+        </div>
+        <p class="body">${esc(i.body)}</p>
+        ${i.acceptance&&i.acceptance.length?`<ul class="acc">${i.acceptance.map(a=>`<li>${esc(a)}</li>`).join('')}</ul>`:''}
+        <div class="slice">${esc(i.slice)}</div>
+        ${i.depends_on&&i.depends_on.length?`<div class="dep">depends on: ${i.depends_on.map(esc).join(', ')}</div>`:''}
+      </article>`).join('');
+  }
+  render();
+</script>
+</body>
+</html>
