@@ -32,6 +32,10 @@ _Avoid_: delete, expire (Burn covers both triggers).
 The number of times a Clip may be revealed before it burns. Default 1. Counts Reveals (ciphertext releases), not distinct users.
 _Avoid_: views, reads, "number of users".
 
+**Kind**:
+The category of a Clip's content (text, code, image, file) that drives how it renders. Inferred client-side at create time and stored in the Clip's encrypted metadata, so the server never learns it.
+_Avoid_: type, format, mime (reserve "Kind" for this four-way category).
+
 ## Relationships
 
 - A **Clip** is encrypted client-side; the server stores only its ciphertext.

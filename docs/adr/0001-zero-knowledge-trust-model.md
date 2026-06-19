@@ -14,6 +14,6 @@ Poof encrypts every Clip in the browser (AES-GCM) before upload and carries the 
 
 - The **Link** (path id + Fragment Key) is the true secret. Anyone with the full link can decrypt.
 - Expiry, PIN, and the approval flow gate *release of the ciphertext*, not decryption. They are access control layered on top of confidentiality, not the source of confidentiality.
-- The server cannot detect content type, render previews, or generate thumbnails. Type detection and rendering (code highlighting, image preview) happen client-side after decryption; the content type is stored inside the encrypted payload.
+- The server cannot detect content type, render previews, or generate thumbnails. Type detection and rendering (code highlighting, image preview) happen client-side after decryption. Content type and other metadata live in a dedicated encrypted metadata blob, separate from the encrypted content blob (see ADR-0003); the server only ever holds ciphertext for both.
 - A lost Fragment Key means the Clip is permanently unrecoverable. This is a feature, not a bug, but must be surfaced honestly in the UI.
 - The 4-digit PIN must be designed against this model (server-side release gate vs. folded into key derivation). Tracked as a downstream decision.
