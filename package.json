@@ -1,0 +1,19 @@
+{
+  "name": "poof",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:client": "esbuild src/client/main.ts --bundle --format=esm --outfile=public/app.js --sourcemap",
+    "dev": "npm run build:client && wrangler dev",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.18",
+    "@cloudflare/workers-types": "^4.20260619.1",
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9",
+    "wrangler": "^4.103.0"
+  }
+}
