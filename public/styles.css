@@ -185,6 +185,14 @@ select:focus { outline: none; border-color: var(--coral); }
 .pin-input:focus { outline: none; border-color: var(--coral); }
 #pin-entry { margin: 14px 0; display: flex; flex-direction: column; gap: 10px; }
 
+/* Recipient countdown (ADR-0014): a thin depleting fuse bar + remaining-time
+   text above the reveal panels, rendered from the encrypted expiresAt. When it
+   reaches zero the revealed content auto-clears (best-effort). */
+.countdown { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
+.cd-bar { flex: 1; height: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.cd-fill { display: block; height: 100%; width: 100%; background: var(--coral); transition: width 0.5s linear; }
+.cd-text { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+
 .site-footer { margin-top: 40px; text-align: center; font-size: 12px; }
 /* Footer GitHub mark is a "coming soon" indicator, not a link: the repo is
    still private (GH #4), so the icon must not navigate to a 404. A corner

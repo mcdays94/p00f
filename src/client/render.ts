@@ -106,6 +106,35 @@ export function clampHeight(raw: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(raw)));
 }
 
+// Countdown (ADR-0014). Pure helpers for the recipient-facing remaining-time
+// view; the DOM wiring + auto-clear timer live in main.ts. The deadline
+// (expiresAt) comes from the decrypted metadata, so these never see the key.
+
+// Human remaining-time string from a millisecond delta. Coarsens with scale:
+// hours show "Hh Mm", minutes show "Mm Ss", under a minute shows "Ss". A
+// non-positive delta is "0s".
+export function formatRemaining(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
+// Fraction (0..1) of the viewing window still remaining, for the depleting bar.
+// The window is measured from when the page opened (openedAt), not the original
+// TTL: the countdown needs only the time left, never the total duration
+// (ADR-0014). Clamped to [0,1]; a non-positive or already-past window yields 0.
+export function countdownFraction(now: number, openedAt: number, expiresAt: number): number {
+  const total = expiresAt - openedAt;
+  const left = expiresAt - now;
+  if (total <= 0 || left <= 0) return 0;
+  if (left >= total) return 1;
+  return left / total;
+}
+
 // Message posted into the sandbox. It carries only displayable plaintext (text
 // or code) or raw image bytes plus a mime, never the key. The text and code
 // branches send a string the sandbox renders via textContent (text) or via the

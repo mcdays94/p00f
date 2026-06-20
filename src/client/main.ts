@@ -9,7 +9,7 @@ import {
 } from "../shared/crypto";
 import { buildLink } from "../shared/link";
 import type { ClipMeta } from "../shared/core";
-import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, type SandboxMessage } from "./render";
+import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, countdownFraction, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -452,6 +452,60 @@ function showGone() {
   show($("#gone"), true);
 }
 
+let countdownTimer = 0;
+
+// Recipient countdown + best-effort auto-clear (ADR-0014). Driven by the
+// expiresAt carried in the decrypted metadata (never a cleartext field). The
+// bar is shown only when the creator left the countdown on, but the auto-clear
+// timer always runs when we know the deadline: an open page clears its revealed
+// content when the poof burns. Best-effort, not a confidentiality control: an
+// already-revealed poof may have been copied or screenshotted.
+function startCountdown(id: string, expiresAt: number, showBar: boolean) {
+  const openedAt = Date.now();
+  const box = $("#countdown");
+  const fill = $(".cd-fill") as HTMLElement;
+  const text = $(".cd-text");
+  if (showBar) show(box, true);
+  let busy = false;
+  let done = false;
+  const expire = () => {
+    if (done) return;
+    done = true;
+    clearInterval(countdownTimer);
+    // Drop the decrypted bytes and tear down the revealed sandbox iframe.
+    sessionCache.delete(id);
+    const host = $("#content");
+    if (host) host.innerHTML = "";
+    show(box, false);
+    showGone();
+  };
+  const tick = () => {
+    if (done) return;
+    const now = Date.now();
+    const left = expiresAt - now;
+    if (showBar) {
+      fill.style.width = (countdownFraction(now, openedAt, expiresAt) * 100).toFixed(2) + "%";
+      text.textContent = left > 0 ? formatRemaining(left) + " left" : "expiring...";
+    }
+    if (left <= 0 && !busy) {
+      busy = true;
+      // Skew-tolerant: confirm the server actually burned it (non-consuming)
+      // before clearing, so a fast client clock cannot clear early.
+      void fetch(`/api/clip/${id}/meta`)
+        .then(async (r) => {
+          const gone = r.status === 404 || !((await r.json().catch(() => ({}))) as { exists?: boolean }).exists;
+          if (gone) expire();
+          else busy = false;
+        })
+        .catch(() => {
+          busy = false;
+        });
+    }
+  };
+  countdownTimer = window.setInterval(tick, 500);
+  tick();
+}
+
 async function initReveal(id: string, keyStr: string) {
   show($("#reveal-page"), true);
   if (!keyStr) return showGone();
@@ -495,6 +549,11 @@ async function initReveal(id: string, keyStr: string) {
     data.revealsRemaining === null ? "unlimited reveals" : `${data.revealsRemaining} reveal(s) left`;
   if (data.pinRequired) show($("#pin-entry"), true);
   show($("#precard"), true);
+
+  // Countdown + best-effort auto-clear once we know the (encrypted) deadline.
+  if (typeof meta.expiresAt === "number") {
+    startCountdown(id, meta.expiresAt, meta.showCountdown !== false);
+  }
 
   $("#reveal-btn").addEventListener("click", () => void doReveal(id, master, meta, data.pinRequired));
 }

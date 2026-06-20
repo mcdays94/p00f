@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage, safeHttpUrl, clampHeight } from "../src/client/render";
+import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, countdownFraction } from "../src/client/render";
 import { SANDBOX_HTML, SANDBOX_CSP } from "../src/shared/sandbox-doc";
 import { tokenize, detectLanguage, LANGS } from "../src/shared/highlight";
 
@@ -265,5 +265,27 @@ describe("#15: reveal-box auto-height", () => {
     // Defence in depth: the auto-height work must not relax the opaque-origin
     // guarantee. The iframe is still mounted with sandbox=allow-scripts only.
     expect(SANDBOX_CSP).not.toContain("allow-same-origin");
+  });
+});
+
+describe("ADR-0014: countdown helpers", () => {
+  it("formats remaining time, coarsening with scale", () => {
+    expect(formatRemaining(0)).toBe("0s");
+    expect(formatRemaining(-5000)).toBe("0s");
+    expect(formatRemaining(45_000)).toBe("45s");
+    expect(formatRemaining(125_000)).toBe("2m 5s");
+    expect(formatRemaining(3_660_000)).toBe("1h 1m");
+  });
+  it("computes the depleting bar fraction from time-left over the viewing window", () => {
+    const opened = 1000;
+    const expires = 11000; // 10s window from page open
+    expect(countdownFraction(1000, opened, expires)).toBe(1); // just opened
+    expect(countdownFraction(6000, opened, expires)).toBe(0.5); // halfway
+    expect(countdownFraction(11000, opened, expires)).toBe(0); // at expiry
+    expect(countdownFraction(20000, opened, expires)).toBe(0); // past expiry
+  });
+  it("clamps to [0,1] and handles a degenerate window", () => {
+    expect(countdownFraction(0, 1000, 11000)).toBe(1); // before open -> full
+    expect(countdownFraction(5000, 5000, 5000)).toBe(0); // zero-length window
   });
 });
