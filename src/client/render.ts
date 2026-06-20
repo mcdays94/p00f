@@ -8,7 +8,7 @@
 // into the sandbox, so the key cannot reach the sandbox by construction.
 import type { ClipMeta } from "../shared/core";
 
-export type RenderMode = "text" | "image" | "secret" | "download";
+export type RenderMode = "text" | "code" | "image" | "secret" | "download";
 
 export interface RenderDecision {
   mode: RenderMode;
@@ -42,7 +42,10 @@ function isSvg(meta: ClipMeta): boolean {
 // - SVG: always a download, never inline (SVG can carry script).
 // - image (non-SVG): rendered in the sandbox.
 // - file: download.
-// - text / code: rendered as escaped text in the sandbox.
+// - text: rendered as escaped text in the sandbox (textContent).
+// - code: rendered in the sandbox with the inlined highlighter (POOF-11).
+//   Highlighting tokenizes the source and writes each token via textContent,
+//   so a code payload that contains raw HTML stays inert.
 // - unknown kind: escaped text if it is valid UTF-8, otherwise a download.
 export function decideRender(meta: ClipMeta, bytes: Uint8Array): RenderDecision {
   const kind = meta.kind;
@@ -52,7 +55,8 @@ export function decideRender(meta: ClipMeta, bytes: Uint8Array): RenderDecision 
     return { mode: "image", mime: meta.mime ?? "application/octet-stream" };
   }
   if (kind === "file") return { mode: "download", mime: meta.mime, filename: meta.filename };
-  if (kind === "text" || kind === "code") return { mode: "text" };
+  if (kind === "code") return { mode: "code" };
+  if (kind === "text") return { mode: "text" };
   // Unknown kind: safe-as-text when UTF-8, otherwise a download.
   return looksUtf8(bytes)
     ? { mode: "text" }
@@ -66,23 +70,29 @@ export function escapeHtml(s: string): string {
   );
 }
 
-// Message posted into the sandbox. It carries only displayable plaintext (text)
-// or raw image bytes plus a mime, never the key. The text branch sends a string
-// the sandbox renders via textContent; the image branch sends bytes the sandbox
-// wraps in a blob URL.
+// Message posted into the sandbox. It carries only displayable plaintext (text
+// or code) or raw image bytes plus a mime, never the key. The text and code
+// branches send a string the sandbox renders via textContent (text) or via the
+// inlined highlighter (code, still token-by-token textContent). The image
+// branch sends bytes the sandbox wraps in a blob URL.
 export type SandboxMessage =
   | { type: "poof-render"; mode: "text"; text: string }
+  | { type: "poof-render"; mode: "code"; text: string }
   | { type: "poof-render"; mode: "image"; bytes: ArrayBuffer; mime: string };
 
 // The plaintext bytes flow into the opaque-origin sandbox document
 // (public/sandbox.html) through this message only. The sandbox renders text via
-// textContent (never HTML) or an image via a blob URL. The key is never here.
+// textContent (never HTML), code via the inlined highlighter (token text still
+// rendered via textContent), or an image via a blob URL. The key is never here.
 export function buildSandboxMessage(decision: RenderDecision, bytes: Uint8Array): SandboxMessage {
   if (decision.mode === "image") {
     // Copy into a standalone ArrayBuffer so we never transfer (and detach) the
     // caller's cached bytes.
     const copy = bytes.slice();
     return { type: "poof-render", mode: "image", bytes: copy.buffer, mime: decision.mime ?? "application/octet-stream" };
+  }
+  if (decision.mode === "code") {
+    return { type: "poof-render", mode: "code", text: tdLoose.decode(bytes) };
   }
   // text and shown-secret both render as escaped text.
   return { type: "poof-render", mode: "text", text: tdLoose.decode(bytes) };

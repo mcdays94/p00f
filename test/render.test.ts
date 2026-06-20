@@ -1,14 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage } from "../src/client/render";
 import { SANDBOX_HTML, SANDBOX_CSP } from "../src/shared/sandbox-doc";
+import { tokenize, detectLanguage, LANGS } from "../src/shared/highlight";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
 
 describe("POOF-14: hostile-content render decisions (ADR-0012)", () => {
-  it("renders text and code as escaped text in the sandbox", () => {
+  it("dispatches text to text-mode and code to code-mode in the sandbox", () => {
     expect(decideRender({ kind: "text", size: 3 }, te.encode("abc")).mode).toBe("text");
-    expect(decideRender({ kind: "code", size: 3 }, te.encode("abc")).mode).toBe("text");
+    expect(decideRender({ kind: "code", size: 3 }, te.encode("abc")).mode).toBe("code");
   });
 
   it("renders non-SVG images in the sandbox", () => {
@@ -69,12 +70,109 @@ describe("POOF-14: hostile-content render decisions (ADR-0012)", () => {
     expect(buildSandboxMessage.length).toBe(2);
   });
 
+  it("builds a key-free sandbox message for code that carries plaintext, not markup", () => {
+    const bytes = te.encode("const x = 1;\nfunction f() { return x; }");
+    const msg = buildSandboxMessage({ mode: "code" }, bytes);
+    expect(msg).toEqual({
+      type: "poof-render",
+      mode: "code",
+      text: "const x = 1;\nfunction f() { return x; }",
+    });
+  });
+
   it("ships a sandbox doc that renders text safely and never reads the key", () => {
     expect(SANDBOX_CSP).toContain("default-src 'none'");
     expect(SANDBOX_CSP).toContain("frame-ancestors 'self'");
     expect(SANDBOX_HTML).toContain("textContent"); // text rendered as text, never HTML
     expect(SANDBOX_HTML).not.toContain("innerHTML");
-    expect(SANDBOX_HTML).not.toContain("location"); // never touches location.hash
+    expect(SANDBOX_HTML).not.toMatch(/\blocation\b/); // never touches location.hash
     expect(SANDBOX_HTML).toContain("poof-sandbox-ready");
+  });
+
+  it("ships a sandbox doc that wires the code branch through the inlined highlighter", () => {
+    // The sandbox handles a code mode in addition to text/image (ADR-0012).
+    expect(SANDBOX_HTML).toMatch(/m\.mode\s*===\s*['"]code['"]/);
+    // It must NOT introduce external sources or relax the opaque-origin guard.
+    expect(SANDBOX_CSP).not.toContain("allow-same-origin");
+    expect(SANDBOX_HTML).not.toMatch(/https?:\/\//);
+    // The highlighter still routes content through textContent on each token,
+    // never through innerHTML or document.write.
+    expect(SANDBOX_HTML).not.toContain("document.write");
+    // The inlined highlighter is bounded; even with all language grammars
+    // inline the served document stays well under the 30 KB budget gzipped.
+    // Use raw byte length as a coarse upper bound (gzipped is far smaller).
+    expect(SANDBOX_HTML.length).toBeLessThan(30 * 1024);
+  });
+});
+
+describe("POOF-11: sandbox-side code highlighter (ADR-0012)", () => {
+  it("tokenize round-trips: concatenated token text equals the source", () => {
+    const src = "const greeting = 'hi';\nfunction f() { return 1 + 2; }";
+    const tokens = tokenize(src, "js");
+    expect(tokens.map((t) => t[1]).join("")).toBe(src);
+  });
+
+  it("tokenize marks JS keywords with the 'k' token type", () => {
+    const tokens = tokenize("const x = 1", "js");
+    expect(tokens.some((t) => t[0] === "k" && t[1] === "const")).toBe(true);
+  });
+
+  it("tokenize marks JS strings with the 's' token type", () => {
+    const tokens = tokenize("var s = 'hello';", "js");
+    expect(tokens.some((t) => t[0] === "s" && t[1] === "'hello'")).toBe(true);
+  });
+
+  it("tokenize falls back to plain text for an unknown language", () => {
+    const src = "anything at all";
+    const tokens = tokenize(src, "no-such-lang");
+    expect(tokens).toEqual([["", "anything at all"]]);
+  });
+
+  it("never produces a token text that has been HTML-pre-escaped", () => {
+    // The highlighter MUST keep token text as raw source. Escaping happens at
+    // the render edge (textContent on each <span>) inside the sandbox. If the
+    // tokenizer pre-escaped, an HTML payload would lose its '<' / '>' /
+    // ampersand bytes and the user would see "&lt;" on screen.
+    const payload = `<script>alert(1)</script><img onerror="x" src=x>`;
+    const tokens = tokenize(payload, "js");
+    expect(tokens.map((t) => t[1]).join("")).toBe(payload);
+    expect(tokens.some((t) => t[1].includes("&lt;"))).toBe(false);
+    expect(tokens.some((t) => t[1].includes("&amp;"))).toBe(false);
+  });
+
+  it("token types are short class suffixes, never raw HTML tags", () => {
+    const payload = `<a href="x">link</a> && other "stuff" /* c */`;
+    const tokens = tokenize(payload, "html");
+    for (const [type] of tokens) {
+      // Class suffixes are empty or a single lowercase letter (a-z).
+      expect(type).toMatch(/^[a-z]?$/);
+    }
+  });
+
+  it("detects common languages", () => {
+    expect(detectLanguage("const x = 1;\nfunction f() { return x; }")).toBe("js");
+    expect(detectLanguage("def foo():\n    return 1")).toBe("python");
+    expect(detectLanguage("SELECT id FROM users WHERE name = 'a'")).toBe("sql");
+    expect(detectLanguage("<div class='x'>hi</div>")).toBe("html");
+    expect(detectLanguage('{"a": 1, "b": [true, false, null]}')).toBe("json");
+    expect(detectLanguage("package main\nfunc main() { fmt.Println(\"hi\") }")).toBe("go");
+    expect(detectLanguage("fn main() { let mut x = 1; println!(\"{}\", x); }")).toBe("rust");
+  });
+
+  it("falls back to 'plain' for content that matches no language", () => {
+    expect(detectLanguage("just some plain English words written here")).toBe("plain");
+    expect(detectLanguage("")).toBe("plain");
+  });
+
+  it("ships a curated set of languages including the suggested ones", () => {
+    const have = Object.keys(LANGS);
+    for (const lang of ["js", "json", "html", "css", "python", "bash", "go", "rust", "sql", "yaml", "markdown"]) {
+      expect(have).toContain(lang);
+    }
+  });
+
+  it("plain-lang tokenize emits the source as a single plain token", () => {
+    const src = "anything";
+    expect(tokenize(src, "plain")).toEqual([["", "anything"]]);
   });
 });
