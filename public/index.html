@@ -43,6 +43,9 @@
               <option value="-1">unlimited reveals</option>
             </select>
           </label>
+          <label>PIN (optional)
+            <input id="pin" class="pin-input" type="text" inputmode="numeric" maxlength="4" placeholder="4 digits" data-testid="pin" />
+          </label>
         </div>
 
         <div id="ts-widget" class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="dark"></div>
@@ -73,6 +76,10 @@
         <div class="pc-row"><span id="pc-kind" class="badge" data-testid="pc-kind"></span><span id="pc-detail" class="muted" data-testid="pc-detail"></span></div>
         <p id="pc-reveals" class="muted" data-testid="pc-reveals"></p>
         <p class="honesty">Revealing may consume the only copy. The metadata above was decrypted in your browser without spending a reveal.</p>
+        <div id="pin-entry" hidden>
+          <input id="reveal-pin" class="pin-input" type="text" inputmode="numeric" maxlength="4" placeholder="enter 4-digit PIN" data-testid="reveal-pin" />
+          <div id="reveal-ts" class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="dark"></div>
+        </div>
         <button id="reveal-btn" class="btn primary" data-testid="reveal-btn">Reveal</button>
         <p id="precard-info" class="error" hidden></p>
       </div>

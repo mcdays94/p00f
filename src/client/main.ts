@@ -138,14 +138,18 @@ async function doCreate() {
   try {
     const master = generateMasterKey();
     const id = generateClipId();
+    const pinRaw = ($("#pin") as HTMLInputElement).value.trim();
+    const pin = /^\d{4}$/.test(pinRaw) ? pinRaw : undefined;
+
     const metaCipher = await encryptBlob(master, id, "metadata", te.encode(JSON.stringify(pending.meta)));
-    const contentCipher = await encryptBlob(master, id, "content", pending.bytes);
+    const contentCipher = await encryptBlob(master, id, "content", pending.bytes, pin);
 
     const fd = new FormData();
     fd.set("id", id);
     fd.set("turnstile", turnstileToken());
     fd.set("ttlMs", ($("#ttl") as HTMLSelectElement).value);
     fd.set("revealBudget", ($("#budget") as HTMLSelectElement).value);
+    if (pin) fd.set("pin", pin);
     fd.set("meta", new Blob([metaCipher]));
     fd.set("content", new Blob([contentCipher]));
 
@@ -199,6 +203,7 @@ async function initReveal(id: string, keyStr: string) {
     exists: boolean;
     metadata: string;
     revealsRemaining: number | null;
+    pinRequired: boolean;
   };
   if (!data.exists) return showGone();
 
@@ -216,26 +221,55 @@ async function initReveal(id: string, keyStr: string) {
   $("#pc-detail").textContent = (meta.filename ? `${meta.filename} · ` : "") + formatSize(meta.size);
   $("#pc-reveals").textContent =
     data.revealsRemaining === null ? "unlimited reveals" : `${data.revealsRemaining} reveal(s) left`;
+  if (data.pinRequired) show($("#pin-entry"), true);
   show($("#precard"), true);
 
-  $("#reveal-btn").addEventListener("click", () => void doReveal(id, master, meta));
+  $("#reveal-btn").addEventListener("click", () => void doReveal(id, master, meta, data.pinRequired));
 }
 
-async function doReveal(id: string, master: Uint8Array, meta: ClipMeta) {
+async function doReveal(id: string, master: Uint8Array, meta: ClipMeta, pinRequired: boolean) {
   const btn = $("#reveal-btn") as HTMLButtonElement;
   btn.disabled = true;
+  show($("#precard-info"), false);
   try {
+    let pin: string | undefined;
     let bytes = sessionCache.get(id);
     if (!bytes) {
-      const res = await fetch(`/api/clip/${id}/reveal`, { method: "POST" });
+      let init: RequestInit = { method: "POST" };
+      if (pinRequired) {
+        pin = ($("#reveal-pin") as HTMLInputElement).value.trim();
+        if (!/^\d{4}$/.test(pin)) {
+          $("#precard-info").textContent = "enter the 4-digit PIN";
+          show($("#precard-info"), true);
+          return;
+        }
+        init = {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ pin, turnstile: turnstileToken() }),
+        };
+      }
+      const res = await fetch(`/api/clip/${id}/reveal`, init);
       if (res.status === 410) return showGone();
+      if (res.status === 423) {
+        $("#precard-info").textContent = "too many wrong PINs. This clip is locked until it expires.";
+        show($("#precard-info"), true);
+        return;
+      }
+      if (res.status === 401) {
+        const body = (await res.json().catch(() => ({}))) as { attemptsLeft?: number };
+        $("#precard-info").textContent =
+          body.attemptsLeft != null ? `wrong PIN. ${body.attemptsLeft} attempt(s) left.` : "PIN required.";
+        show($("#precard-info"), true);
+        return;
+      }
       if (!res.ok) {
         $("#precard-info").textContent = "reveal failed";
         show($("#precard-info"), true);
         return;
       }
       const cipher = new Uint8Array(await res.arrayBuffer());
-      bytes = await decryptBlob(master, id, "content", cipher);
+      bytes = await decryptBlob(master, id, "content", cipher, pin);
       sessionCache.set(id, bytes);
     }
     renderContent(bytes, meta);
