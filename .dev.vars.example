@@ -1,0 +1,5 @@
+# Local dev + test secrets for `wrangler dev` and the vitest pool. Copy to
+# .dev.vars (gitignored). The value below is Cloudflare's PUBLIC always-pass
+# Turnstile test secret, which is safe to commit and makes any token verify
+# offline. Production uses a real secret set with `wrangler secret put`.
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA

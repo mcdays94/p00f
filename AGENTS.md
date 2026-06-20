@@ -46,6 +46,7 @@ Status vocabulary: `needs-triage` | `ready-for-agent` | `in-progress` | `done` |
 
 ## Build & dev (local only)
 
+- First-time setup: `cp .dev.vars.example .dev.vars` (provides the public Turnstile test secret to `wrangler dev` and the test pool). `.dev.vars` is gitignored; production sets a real `TURNSTILE_SECRET` via `wrangler secret put`.
 - Dev server via portless: `portless run npx wrangler dev --port $PORT`, referenced as `https://poof.localhost`. Never deploy without an explicit ask.
 - Tests: `npx vitest run` (Worker and Durable Object tests run under `@cloudflare/vitest-pool-workers`).
 - Git: local-first, personal identity (`amtccdias@gmail.com` / `mcdays94`). Small, focused commits. Never push without an explicit ask.
