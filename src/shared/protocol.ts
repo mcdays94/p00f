@@ -40,7 +40,9 @@ export async function createClip(
 ): Promise<{ id: string; ownerToken: string }> {
   const fd = new FormData();
   fd.set("id", c.id);
-  fd.set("turnstile", c.turnstile ?? "tok");
+  // Machine path sends no Turnstile token; the server allows it under the floor
+  // (ADR-0011). A browser shell passes a real token to rise above the floor.
+  if (c.turnstile) fd.set("turnstile", c.turnstile);
   if (c.ttlMs != null) fd.set("ttlMs", String(c.ttlMs));
   if (c.revealBudget != null) fd.set("revealBudget", String(c.revealBudget));
   if (c.pin) fd.set("pin", c.pin);

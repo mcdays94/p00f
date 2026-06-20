@@ -27,6 +27,16 @@ function clampBudget(v: number): number {
   return ALLOWED_BUDGET.includes(v) ? v : DEFAULT_BUDGET;
 }
 
+// Identity-free rate-limit floor for the machine path (ADR-0011). Uses the GA
+// Workers ratelimit binding when configured; if absent, allows (a self-hoster
+// adds the binding). Enforced per data center, so it is a floor, not a hard cap.
+async function underCreateFloor(env: Env, ip: string | null): Promise<boolean> {
+  const rl = env.CREATE_LIMIT;
+  if (!rl) return true;
+  const { success } = await rl.limit({ key: ip ?? "anon" });
+  return success;
+}
+
 async function handleCreate(request: Request, env: Env): Promise<Response> {
   let form: FormData;
   try {
@@ -35,10 +45,18 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     return json({ error: "bad_request" }, 400);
   }
 
+  // Browser path: a valid Turnstile token lifts the caller above the floor.
+  // Machine path (CLI, MCP, agents): no human to solve Turnstile, so anonymous
+  // create is allowed under the identity-free rate-limit floor (ADR-0011).
+  const ip = request.headers.get("CF-Connecting-IP");
   const token = form.get("turnstile");
-  if (typeof token !== "string") return json({ error: "turnstile_required" }, 403);
-  const ok = await verifyTurnstile(token, env.TURNSTILE_SECRET, request.headers.get("CF-Connecting-IP"));
-  if (!ok) return json({ error: "turnstile_failed" }, 403);
+  const humanVerified =
+    typeof token === "string" && token.length > 0
+      ? await verifyTurnstile(token, env.TURNSTILE_SECRET, ip)
+      : false;
+  if (!humanVerified && !(await underCreateFloor(env, ip))) {
+    return json({ error: "rate_limited" }, 429);
+  }
 
   const meta = form.get("meta");
   const content = form.get("content");

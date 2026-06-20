@@ -36,9 +36,11 @@ describe("Worker API", () => {
     expect(Array.from(new Uint8Array(await rr.arrayBuffer()))).toEqual([10, 20, 30]);
   });
 
-  it("requires a Turnstile token on create", async () => {
+  it("allows anonymous machine create without Turnstile, under the floor (ADR-0011)", async () => {
     const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: createForm({ withToken: false }) });
-    expect(cr.status).toBe(403);
+    expect(cr.status).toBe(200);
+    const { id } = (await cr.json()) as { id: string };
+    expect(id).toBeTruthy();
   });
 
   it("returns 404 for an unknown clip", async () => {
