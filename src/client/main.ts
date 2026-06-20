@@ -9,7 +9,7 @@ import {
 } from "../shared/crypto";
 import { buildLink } from "../shared/link";
 import type { ClipMeta } from "../shared/core";
-import { decideRender, buildSandboxMessage, safeHttpUrl, type SandboxMessage } from "./render";
+import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -50,6 +50,16 @@ async function copyText(text: string, btn: HTMLElement) {
     const old = btn.textContent;
     btn.textContent = "copied";
     setTimeout(() => (btn.textContent = old), 1200);
+  } catch {
+    /* clipboard blocked */
+  }
+}
+
+// Plain text copy without a button-label swap. Used by the reveal-box corner
+// copy icon (#15), which shows its own affordance via a .copied CSS class.
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
   } catch {
     /* clipboard blocked */
   }
@@ -382,6 +392,29 @@ function download(bytes: Uint8Array, filename: string, mime: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+// Inline copy icon for the reveal box corner affordance (#15). The icon lives
+// in the key-holding parent, never inside the sandbox, so it has direct access
+// to the decrypted bytes the user actually wants to copy. SVG markup is static
+// and trusted; no user content flows in here.
+const COPY_ICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+
+function makeCornerCopyIcon(onCopy: () => void | Promise<void>): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "clip-copy-icon";
+  btn.setAttribute("aria-label", "copy");
+  btn.title = "copy";
+  btn.innerHTML = COPY_ICON_SVG;
+  btn.addEventListener("click", () => {
+    void Promise.resolve(onCopy()).then(() => {
+      btn.classList.add("copied");
+      setTimeout(() => btn.classList.remove("copied"), 1200);
+    });
+  });
+  return btn;
+}
+
 // Mount the revealed content in an opaque-origin sandboxed iframe (ADR-0012).
 // sandbox="allow-scripts" without allow-same-origin gives the frame a unique
 // opaque origin: even if a payload ran inside, it could not read the parent's
@@ -389,20 +422,59 @@ function download(bytes: Uint8Array, filename: string, mime: string) {
 // real /sandbox.html document (a real URL does not inherit the parent's strict
 // CSP, unlike a blob/srcdoc/data frame). Plaintext bytes are handed in by
 // postMessage only after the sandbox signals ready; the key is never posted.
-function mountSandbox(host: HTMLElement, message: SandboxMessage) {
+//
+// When `copy` is supplied, the iframe is wrapped in a positioned .clip-box and
+// a corner copy icon is added (#15). The icon runs in the parent (which holds
+// the decrypted bytes); the sandbox itself is never asked to handle the key.
+function mountSandbox(host: HTMLElement, message: SandboxMessage, copy?: () => void | Promise<void>) {
   const iframe = document.createElement("iframe");
   iframe.className = "clip-frame";
   iframe.setAttribute("sandbox", "allow-scripts");
   iframe.src = "/sandbox.html";
+
   const onMsg = (e: MessageEvent) => {
     if (e.source !== iframe.contentWindow) return;
     if (e.data === "poof-sandbox-ready") {
       iframe.contentWindow?.postMessage(message, "*");
-      window.removeEventListener("message", onMsg);
+      return;
+    }
+    // The sandbox posts {type:"poof-size", height} after rendering so the
+    // reveal box auto-sizes to its content (#15). The message carries only a
+    // number; the opaque-origin guarantee is unchanged. We keep the listener
+    // attached past the handshake because the image branch posts its size
+    // asynchronously after its load event.
+    if (e.data && typeof e.data === "object" && (e.data as { type?: string }).type === "poof-size") {
+      const raw = Number((e.data as { height?: number }).height);
+      // +4px avoids a hairline scrollbar from sub-pixel rounding. The MAX is
+      // clamped to a sensible portion of the viewport so a very tall payload
+      // does not push the page chrome off-screen; the user can still drag the
+      // .clip-frame resize handle to see more.
+      const max = Math.min(600, Math.round(window.innerHeight * 0.6));
+      iframe.style.height = clampHeight(raw + 4, 120, max) + "px";
     }
   };
   window.addEventListener("message", onMsg);
-  host.appendChild(iframe);
+
+  if (copy) {
+    const box = document.createElement("div");
+    box.className = "clip-box";
+    box.appendChild(iframe);
+    box.appendChild(makeCornerCopyIcon(copy));
+    host.appendChild(box);
+  } else {
+    host.appendChild(iframe);
+  }
+}
+
+// Copy the decrypted image bytes to the system clipboard as an image item.
+// Mirrors the existing "copy image" .actions button (#15: corner icon reuses
+// the same logic, kept in one place so both stay in sync).
+async function copyImageBytes(bytes: Uint8Array, mime: string): Promise<void> {
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ [mime]: new Blob([bytes], { type: mime }) })]);
+  } catch {
+    /* unsupported */
+  }
 }
 
 function renderContent(bytes: Uint8Array, meta: ClipMeta) {
@@ -432,24 +504,15 @@ function renderContent(bytes: Uint8Array, meta: ClipMeta) {
     const showBtn = actionButton("show", () => {
       mask.remove();
       showBtn.remove();
-      mountSandbox(host, buildSandboxMessage({ mode: "text" }, bytes));
+      mountSandbox(host, buildSandboxMessage({ mode: "text" }, bytes), () => copyToClipboard(td.decode(bytes)));
     });
     const copyBtn = actionButton("copy", () => copyText(td.decode(bytes), copyBtn));
     actions.appendChild(showBtn);
     actions.appendChild(copyBtn);
   } else if (decision.mode === "image") {
-    mountSandbox(host, buildSandboxMessage(decision, bytes));
-    actions.appendChild(
-      actionButton("copy image", async () => {
-        try {
-          await navigator.clipboard.write([
-            new ClipboardItem({ [meta.mime ?? "image/png"]: new Blob([bytes], { type: meta.mime ?? "image/png" }) }),
-          ]);
-        } catch {
-          /* unsupported */
-        }
-      }),
-    );
+    const imgMime = meta.mime ?? "image/png";
+    mountSandbox(host, buildSandboxMessage(decision, bytes), () => copyImageBytes(bytes, imgMime));
+    actions.appendChild(actionButton("copy image", () => copyImageBytes(bytes, imgMime)));
     actions.appendChild(actionButton("download", () => download(bytes, meta.filename ?? "image", meta.mime ?? "image/png")));
   } else if (decision.mode === "link") {
     // Masked URL (ADR-0013). Rendered in the key-holding parent (the sandbox
@@ -479,15 +542,16 @@ function renderContent(bytes: Uint8Array, meta: ClipMeta) {
       actions.appendChild(copyBtn);
     } else {
       // Hostile or malformed scheme: fall back to the escaped-text sandbox
-      // path so the bytes are shown but never clickable.
-      mountSandbox(host, buildSandboxMessage({ mode: "text" }, bytes));
+      // path so the bytes are shown but never clickable. The corner copy icon
+      // (#15) shows its own affordance via the .copied class.
+      mountSandbox(host, buildSandboxMessage({ mode: "text" }, bytes), () => copyToClipboard(text));
       const copyBtn = actionButton("copy", () => copyText(text, copyBtn));
       actions.appendChild(copyBtn);
     }
   } else {
     // text / code / unknown-but-UTF8
     const text = td.decode(bytes);
-    mountSandbox(host, buildSandboxMessage(decision, bytes));
+    mountSandbox(host, buildSandboxMessage(decision, bytes), () => copyToClipboard(text));
     const copyBtn = actionButton("copy", () => copyText(text, copyBtn));
     actions.appendChild(copyBtn);
   }

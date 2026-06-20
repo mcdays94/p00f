@@ -95,6 +95,17 @@ export function escapeHtml(s: string): string {
   );
 }
 
+// Clamp the reveal iframe height to a sensible range so the sandbox auto-sizes
+// to its content without growing to a window-busting size. Used by mountSandbox
+// when it receives a `poof-size` message from the opaque-origin sandbox.
+// Pure (no DOM), so it is unit-tested directly. NaN/Infinity collapse to `min`
+// so an inert size message can never produce an invalid height.
+export function clampHeight(raw: number, min: number, max: number): number {
+  if (!Number.isFinite(raw)) return min;
+  if (max < min) return min;
+  return Math.max(min, Math.min(max, Math.round(raw)));
+}
+
 // Message posted into the sandbox. It carries only displayable plaintext (text
 // or code) or raw image bytes plus a mime, never the key. The text and code
 // branches send a string the sandbox renders via textContent (text) or via the

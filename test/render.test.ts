@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage, safeHttpUrl } from "../src/client/render";
+import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage, safeHttpUrl, clampHeight } from "../src/client/render";
 import { SANDBOX_HTML, SANDBOX_CSP } from "../src/shared/sandbox-doc";
 import { tokenize, detectLanguage, LANGS } from "../src/shared/highlight";
 
@@ -228,5 +228,42 @@ describe("POOF-13: masked URL Kind (ADR-0013)", () => {
     for (const s of hostile) {
       expect(safeHttpUrl(s), `expected null for ${s}`).toBeNull();
     }
+  });
+});
+
+describe("#15: reveal-box auto-height", () => {
+  it("clampHeight returns raw when between min and max", () => {
+    expect(clampHeight(300, 120, 600)).toBe(300);
+  });
+  it("clampHeight floors to min when raw is too small or negative", () => {
+    expect(clampHeight(40, 120, 600)).toBe(120);
+    expect(clampHeight(0, 120, 600)).toBe(120);
+    expect(clampHeight(-50, 120, 600)).toBe(120);
+  });
+  it("clampHeight caps at max when raw exceeds it", () => {
+    expect(clampHeight(900, 120, 600)).toBe(600);
+  });
+  it("clampHeight rounds fractional pixel values", () => {
+    expect(clampHeight(123.4, 120, 600)).toBe(123);
+    expect(clampHeight(123.6, 120, 600)).toBe(124);
+  });
+  it("clampHeight collapses NaN and Infinity to min so an inert size message stays safe", () => {
+    expect(clampHeight(Number.NaN, 120, 600)).toBe(120);
+    expect(clampHeight(Number.POSITIVE_INFINITY, 120, 600)).toBe(120);
+    expect(clampHeight(Number.NEGATIVE_INFINITY, 120, 600)).toBe(120);
+  });
+  it("clampHeight returns min when max is below min (degenerate viewport)", () => {
+    expect(clampHeight(500, 200, 100)).toBe(200);
+  });
+  it("sandbox doc posts a poof-size message with scrollHeight", () => {
+    // The reveal box auto-sizes by listening for {type:"poof-size", height}
+    // from the opaque-origin sandbox. The size message carries only a number.
+    expect(SANDBOX_HTML).toContain("poof-size");
+    expect(SANDBOX_HTML).toContain("scrollHeight");
+  });
+  it("sandbox CSP still excludes allow-same-origin", () => {
+    // Defence in depth: the auto-height work must not relax the opaque-origin
+    // guarantee. The iframe is still mounted with sandbox=allow-scripts only.
+    expect(SANDBOX_CSP).not.toContain("allow-same-origin");
   });
 });

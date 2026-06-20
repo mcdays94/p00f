@@ -128,16 +128,30 @@ pre.code .t-o{color:#c94f4f}
     root.appendChild(pre);
   }
   var r = document.getElementById("r");
+  // Post the rendered content height to the parent so the reveal iframe can
+  // size itself to its content (#15). The message carries only a number; no
+  // origin info, no key (the sandbox never had the key), and the opaque-origin
+  // guarantee is unchanged.
+  function postSize() {
+    parent.postMessage({ type: "poof-size", height: document.documentElement.scrollHeight }, "*");
+  }
   addEventListener("message", function (e) {
     var m = e.data;
     if (!m || m.type !== "poof-render") return;
     if (m.mode === "text") {
       r.textContent = m.text;
+      postSize();
     } else if (m.mode === "code") {
       renderCode(r, m.text);
+      postSize();
     } else if (m.mode === "image") {
       var u = URL.createObjectURL(new Blob([m.bytes], { type: m.mime || "application/octet-stream" }));
       var i = new Image();
+      // Measure AFTER the image decodes so scrollHeight reflects its rendered
+      // size. An onerror still posts a size so the box never stays stuck at
+      // the wire min-height.
+      i.onload = postSize;
+      i.onerror = postSize;
       i.src = u;
       r.appendChild(i);
     }

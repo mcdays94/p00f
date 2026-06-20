@@ -95,8 +95,40 @@ select:focus { outline: none; border-color: var(--coral); }
 .clip-pre { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow: auto; }
 .clip-pre code { font-family: var(--mono); font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .clip-img { max-width: 100%; border-radius: 10px; border: 1px solid var(--line); }
-/* Revealed content renders inside an opaque-origin sandbox (ADR-0012). */
-.clip-frame { width: 100%; min-height: 120px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+/* Revealed content renders inside an opaque-origin sandbox (ADR-0012). The
+   frame auto-sizes to its content (#15: sandbox posts poof-size; parent clamps
+   to a viewport-relative max) and stays user-resizable so the viewer can drag
+   the corner to see more. `display:block` removes the inline-element baseline
+   gap that would otherwise leave a few pixels under the iframe. */
+.clip-box { position: relative; }
+.clip-frame { display: block; width: 100%; min-height: 120px; max-height: 80vh; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); resize: vertical; overflow: auto; }
+/* Corner copy icon (#15): lives in the key-holding parent, not the sandbox.
+   Subtle by default; the hover/focus reveal keeps the reveal box uncluttered
+   while staying keyboard-reachable. */
+.clip-copy-icon {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(20, 20, 22, 0.85);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+.clip-box:hover .clip-copy-icon,
+.clip-copy-icon:hover,
+.clip-copy-icon:focus-visible { opacity: 1; color: var(--text); border-color: var(--coral); }
+.clip-copy-icon:focus-visible { outline: none; }
+.clip-copy-icon.copied { color: var(--green); border-color: var(--green); opacity: 1; }
+.clip-copy-icon svg { display: block; }
 .secret-mask { font-family: var(--mono); font-size: 16px; letter-spacing: 0.3em; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 0; }
 .secret-toggle { flex-direction: row; align-items: center; gap: 8px; }
 .secret-toggle input { accent-color: var(--coral); }
