@@ -1,42 +1,37 @@
-# Issue tracker: Local human-readable HTML board
+# Issue tracker: GitHub Issues
 
-Issues and the PRD for this repo are tracked locally, with no remote, until the user decides to sync to a git remote.
+Issues for this repo are tracked on **GitHub Issues** at `mcdays94/p00f` (private), using the `gh` CLI (authenticated as `mcdays94`).
 
 ## Source of truth
 
-`poof-issues.html` at the repo root is the human-readable source of truth for all issues. It is a single self-contained file (open it directly in a browser via `file://`, no build step, no server) styled with the Cohere DESIGN.md tokens (`docs/design/cohere.DESIGN.md`).
-
-Issue data is embedded in the file as JSON and rendered by an inline script:
-
-```html
-<script type="application/json" id="poof-issues">
-[ { ...issue... }, ... ]
-</script>
-```
-
-### Issue object schema
-
-- `id` — string, e.g. `"POOF-1"`
-- `title` — string
-- `slice` — string, the vertical slice / area it belongs to
-- `status` — one of `needs-triage` | `ready-for-agent` | `in-progress` | `done` | `blocked` | `wontfix`
-- `priority` — `high` | `medium` | `low`
-- `depends_on` — array of issue ids
-- `body` — string, what and why
-- `acceptance` — array of strings, acceptance criteria
+GitHub Issues on `mcdays94/p00f`. The PRDs stay canonical as markdown in `docs/prd/`; link the relevant PRD from an issue when useful.
 
 ## When a skill says "publish to the issue tracker"
 
-Append a new issue object to the JSON array inside `poof-issues.html`. Do not hand-edit the rendered DOM; edit only the JSON block. The board re-renders from the JSON on load.
+Create a GitHub issue:
+
+```sh
+gh issue create -R mcdays94/p00f --title "<title>" --body "<what and why + acceptance criteria>" --label "<labels>"
+```
+
+Put acceptance criteria as a checklist in the body. Apply a state label (see `triage-labels.md`) and, where it fits, `bug` or `enhancement`.
 
 ## When a skill says "fetch the relevant ticket"
 
-Read the issue object with the given `id` from the JSON array in `poof-issues.html`.
+```sh
+gh issue view <number> -R mcdays94/p00f
+```
 
-## PRD
+## Updating progress
 
-The PRD is canonical as markdown at `docs/prd/0001-poof.md`. Its summary and a link are surfaced at the top of `poof-issues.html`.
+- Move state by swapping labels: `gh issue edit <n> -R mcdays94/p00f --add-label in-progress --remove-label ready-for-agent`
+- Comment with context: `gh issue comment <n> -R mcdays94/p00f --body "..."`
+- "Done" is a closed issue: `gh issue close <n> -R mcdays94/p00f` (optionally `--comment "..."`). Do not keep a `done` label.
 
-## Migration
+## PRDs
 
-When the user syncs to a remote (GitHub or GitLab), this board can be migrated to that tracker. Until then, everything stays local.
+Canonical markdown in `docs/prd/` (`0001-poof.md` = v1, `0002-poof-agent-native.md` = v2). Reference the PRD from the issues that implement it.
+
+## Historical ledger
+
+`poof-issues.html` at the repo root is the historical record of the v1/v2 build (POOF-1..19, all done). It is kept for history and is no longer updated; all new issues go to GitHub.
