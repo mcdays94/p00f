@@ -7,6 +7,7 @@ import {
   decryptBlob,
   base64urlDecode,
 } from "../shared/crypto";
+import { buildLink } from "../shared/link";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -182,7 +183,7 @@ async function doCreate() {
     lastClipId = serverId;
     lastOwnerToken = ownerToken;
 
-    const link = `${location.origin}/c/${serverId}#${encodeKey(master)}`;
+    const link = buildLink({ origin: location.origin, id: serverId, key: master });
     ($("#link") as HTMLInputElement).value = link;
     show($("#composer"), false);
     show($("#result"), true);
