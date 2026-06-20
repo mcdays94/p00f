@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./dist",
+    "rootDir": "../../src/shared",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmitOnError": false
+  },
+  "include": ["../../src/shared/core.ts"]
+}
