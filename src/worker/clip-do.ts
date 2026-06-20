@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./types";
-import { pbkdf2B64, randomSaltB64 } from "./hash";
+import { pbkdf2B64, randomSaltB64, sha256B64 } from "./hash";
 
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_ITERS = 100_000;
@@ -12,6 +12,8 @@ export interface CreateInput {
   revealBudget: number; // -1 = unlimited
   size: number;
   pin?: string;
+  ownerHash?: string;
+  ownerSalt?: string;
 }
 
 export type MetaResult =
@@ -41,6 +43,8 @@ interface Row {
   pin_iters: number | null;
   pin_attempts: number;
   locked_until: number;
+  owner_hash: string | null;
+  owner_salt: string | null;
 }
 
 const SCHEMA = `
@@ -82,7 +86,7 @@ export class ClipDO extends DurableObject<Env> {
     try {
       const rows = this.ctx.storage.sql
         .exec<Row>(
-          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until FROM clip WHERE id = 1",
+          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt FROM clip WHERE id = 1",
         )
         .toArray();
       return rows.length ? rows[0] : null;
@@ -107,7 +111,7 @@ export class ClipDO extends DurableObject<Env> {
     }
 
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, pin_hash, pin_salt, pin_iters) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)",
       now,
       expiresAt,
       input.revealBudget,
@@ -117,6 +121,8 @@ export class ClipDO extends DurableObject<Env> {
       pinHash,
       pinSalt,
       pinIters,
+      input.ownerHash ?? null,
+      input.ownerSalt ?? null,
     );
     await this.ctx.storage.setAlarm(expiresAt);
     return { ok: true };
@@ -192,6 +198,17 @@ export class ClipDO extends DurableObject<Env> {
       this.ctx.storage.sql.exec("UPDATE clip SET reveals_used = ? WHERE id = 1", used);
     }
     return { ok: true, content };
+  }
+
+  // Owner-gated early burn (ADR-0008). The owner token never travels in the
+  // Link, so a link-holder cannot destroy the clip.
+  async deleteWithOwner(token: string): Promise<{ ok: boolean }> {
+    const row = this.row();
+    if (!row || !row.owner_hash || !row.owner_salt) return { ok: false };
+    const candidate = await sha256B64(row.owner_salt + token);
+    if (candidate !== row.owner_hash) return { ok: false };
+    await this.burn();
+    return { ok: true };
   }
 
   // Permanent destruction: cancel the alarm and clear storage. The DELETE is

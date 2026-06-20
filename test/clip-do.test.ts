@@ -1,5 +1,6 @@
 import { env, runDurableObjectAlarm } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
+import { sha256B64, randomSaltB64 } from "../src/worker/hash";
 
 const b = (...n: number[]) => new Uint8Array(n);
 const stub = (name: string) => env.CLIP.getByName(name);
@@ -99,5 +100,19 @@ describe("ClipDO lifecycle", () => {
     // wrong attempts never spent the single reveal: the clip still exists
     const m = await s.getMeta();
     expect(m.exists).toBe(true);
+  });
+
+  it("owner token authorizes early burn; a wrong token does not", async () => {
+    const s = stub("own1");
+    const salt = randomSaltB64();
+    const token = "owner-secret-xyz";
+    const ownerHash = await sha256B64(salt + token);
+    await s.create({ metadata: b(1), content: b(2), ttlMs: 60_000, revealBudget: 5, size: 1, ownerHash, ownerSalt: salt });
+
+    expect((await s.deleteWithOwner("wrong-token")).ok).toBe(false);
+    expect((await s.getMeta()).exists).toBe(true);
+
+    expect((await s.deleteWithOwner(token)).ok).toBe(true);
+    expect(await s.getMeta()).toEqual({ exists: false });
   });
 });

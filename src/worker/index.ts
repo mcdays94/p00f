@@ -1,7 +1,8 @@
 import { ClipDO } from "./clip-do";
 import type { Env } from "./types";
-import { generateClipId, base64urlEncode } from "../shared/crypto";
+import { generateClipId, base64urlEncode, generateOwnerToken } from "../shared/crypto";
 import { verifyTurnstile } from "./turnstile";
+import { sha256B64, randomSaltB64 } from "./hash";
 
 export { ClipDO };
 export type { Env };
@@ -63,6 +64,10 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   const metadata = new Uint8Array(await meta.arrayBuffer());
   const contentBytes = new Uint8Array(await content.arrayBuffer());
 
+  const ownerToken = generateOwnerToken();
+  const ownerSalt = randomSaltB64();
+  const ownerHash = await sha256B64(ownerSalt + ownerToken);
+
   await env.CLIP.getByName(id).create({
     metadata,
     content: contentBytes,
@@ -70,9 +75,24 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     revealBudget,
     size: content.size,
     pin,
+    ownerHash,
+    ownerSalt,
   });
 
-  return json({ id });
+  return json({ id, ownerToken });
+}
+
+async function handleDelete(id: string, env: Env, request: Request): Promise<Response> {
+  let body: { ownerToken?: unknown } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    // no body
+  }
+  const ownerToken = typeof body.ownerToken === "string" ? body.ownerToken : undefined;
+  if (!ownerToken) return json({ error: "owner_token_required" }, 400);
+  const r = await env.CLIP.getByName(id).deleteWithOwner(ownerToken);
+  return json({ ok: r.ok }, r.ok ? 200 : 403);
 }
 
 async function handleMeta(id: string, env: Env): Promise<Response> {
@@ -127,6 +147,9 @@ export default {
 
     const rev = p.match(/^\/api\/clip\/([^/]+)\/reveal$/);
     if (rev && request.method === "POST") return handleReveal(rev[1], env, request);
+
+    const del = p.match(/^\/api\/clip\/([^/]+)\/delete$/);
+    if (del && request.method === "POST") return handleDelete(del[1], env, request);
 
     if (p.startsWith("/api/")) return new Response("Not found", { status: 404 });
 

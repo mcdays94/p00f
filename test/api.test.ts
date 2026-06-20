@@ -84,4 +84,26 @@ describe("Worker API", () => {
     expect(ok.status).toBe(200);
     expect(Array.from(new Uint8Array(await ok.arrayBuffer()))).toEqual([10, 20, 30]);
   });
+
+  it("owner token deletes a clip; a link-holder without it cannot", async () => {
+    const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: createForm({ revealBudget: 5 }) });
+    const { id, ownerToken } = (await cr.json()) as { id: string; ownerToken: string };
+    expect(ownerToken).toBeTruthy();
+
+    const wrong = await SELF.fetch(`${base}/api/clip/${id}/delete`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ownerToken: "nope" }),
+    });
+    expect(wrong.status).toBe(403);
+    expect((await SELF.fetch(`${base}/api/clip/${id}/meta`)).status).toBe(200);
+
+    const ok = await SELF.fetch(`${base}/api/clip/${id}/delete`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ownerToken }),
+    });
+    expect(ok.status).toBe(200);
+    expect((await SELF.fetch(`${base}/api/clip/${id}/meta`)).status).toBe(404);
+  });
 });

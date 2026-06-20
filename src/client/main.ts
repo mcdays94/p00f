@@ -48,6 +48,8 @@ async function copyText(text: string, btn: HTMLElement) {
 // ---------------- create ----------------
 
 let pending: { bytes: Uint8Array; meta: ClipMeta } | null = null;
+let lastClipId = "";
+let lastOwnerToken = "";
 
 function setPending(bytes: Uint8Array, meta: ClipMeta) {
   pending = { bytes, meta };
@@ -127,6 +129,27 @@ function initCreate() {
   $("#new-clip").addEventListener("click", () => {
     location.href = "/";
   });
+  $("#delete-now").addEventListener("click", () => void doDeleteNow());
+}
+
+async function doDeleteNow() {
+  if (!lastClipId || !lastOwnerToken) return;
+  const status = $("#delete-status");
+  try {
+    const res = await fetch(`/api/clip/${lastClipId}/delete`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ownerToken: lastOwnerToken }),
+    });
+    status.textContent = res.ok ? "burned. the link is now dead." : "delete failed.";
+    if (res.ok) {
+      ($("#delete-now") as HTMLButtonElement).disabled = true;
+      ($("#link") as HTMLInputElement).value = "(burned)";
+    }
+  } catch {
+    status.textContent = "delete failed.";
+  }
+  show(status, true);
 }
 
 async function doCreate() {
@@ -155,7 +178,9 @@ async function doCreate() {
 
     const res = await fetch("/api/clip", { method: "POST", body: fd });
     if (!res.ok) throw new Error(`create failed (${res.status})`);
-    const { id: serverId } = (await res.json()) as { id: string };
+    const { id: serverId, ownerToken } = (await res.json()) as { id: string; ownerToken: string };
+    lastClipId = serverId;
+    lastOwnerToken = ownerToken;
 
     const link = `${location.origin}/c/${serverId}#${encodeKey(master)}`;
     ($("#link") as HTMLInputElement).value = link;

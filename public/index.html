@@ -63,7 +63,9 @@
         <p class="honesty">Anyone with this link can decrypt the clip. We never see its contents, and we cannot recover it. Lose the link and it is gone.</p>
         <details class="advanced">
           <summary>advanced</summary>
-          <p class="muted">Delete-now (owner token) lands in POOF-9.</p>
+          <p class="muted">Only you hold this clip's owner key (it is never in the link). Use it to burn the clip now, before it expires.</p>
+          <button id="delete-now" class="btn ghost" data-testid="delete-now">delete now</button>
+          <p id="delete-status" class="muted" hidden></p>
         </details>
         <button id="new-clip" class="btn ghost">new clip</button>
       </div>
