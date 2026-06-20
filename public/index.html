@@ -17,7 +17,7 @@
     <!-- CREATE -->
     <section id="create-page" class="page" hidden>
       <div id="composer" class="panel">
-        <p class="panel-kicker">// new clip</p>
+        <p class="panel-kicker">// new poof</p>
         <div id="dropzone" class="dropzone">
           <textarea id="text" class="text" placeholder="Paste text or code, drop a file, or paste an image..." spellcheck="false"></textarea>
           <div class="dz-foot">
@@ -60,7 +60,7 @@
 
         <div id="ts-widget" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark" data-size="compact"></div>
 
-        <button id="create-btn" class="btn primary" data-testid="create-btn" disabled>Create link</button>
+        <button id="create-btn" class="btn primary" data-testid="create-btn" disabled>Create poof</button>
         <p id="create-error" class="error" hidden></p>
       </div>
 
@@ -70,21 +70,21 @@
           <input id="link" class="link" data-testid="link" readonly />
           <button id="copy-link" class="btn" data-testid="copy-link">copy</button>
         </div>
-        <p class="honesty">Anyone with this link can decrypt the clip. We never see its contents, and we cannot recover it. Lose the link and it is gone.</p>
+        <p class="honesty">Anyone with this link can decrypt the poof. We never see its contents, and we cannot recover it. Lose the link and it is gone.</p>
         <details class="advanced">
           <summary>advanced</summary>
-          <p class="muted">Only you hold this clip's owner key (it is never in the link). Use it to burn the clip now, before it expires.</p>
+          <p class="muted">Only you hold this poof's owner key (it is never in the link). Use it to burn the poof now, before it expires.</p>
           <button id="delete-now" class="btn ghost" data-testid="delete-now">delete now</button>
           <p id="delete-status" class="muted" hidden></p>
         </details>
-        <button id="new-clip" class="btn ghost">new clip</button>
+        <button id="new-clip" class="btn ghost">new poof</button>
       </div>
     </section>
 
     <!-- REVEAL -->
     <section id="reveal-page" class="page" hidden>
       <div id="precard" class="panel" hidden>
-        <p class="panel-kicker">// you have a clip</p>
+        <p class="panel-kicker">// you have a poof</p>
         <div class="pc-row"><span id="pc-kind" class="badge" data-testid="pc-kind"></span><span id="pc-detail" class="muted" data-testid="pc-detail"></span></div>
         <p id="pc-reveals" class="muted" data-testid="pc-reveals"></p>
         <p class="honesty">Revealing may consume the only copy. The metadata above was decrypted in your browser without spending a reveal.</p>
@@ -109,7 +109,7 @@
 
       <div id="gone" class="panel gone" hidden data-testid="gone">
         <p class="poof">poof.</p>
-        <p class="muted">This clip is gone, expired, burned, or never existed.</p>
+        <p class="muted">This poof is gone, expired, burned, or never existed.</p>
         <a class="btn ghost" href="/">make one</a>
       </div>
     </section>

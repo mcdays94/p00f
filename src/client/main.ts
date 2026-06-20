@@ -248,7 +248,7 @@ async function doCreate() {
     show($("#create-error"), true);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Create link";
+    btn.textContent = "Create poof";
   }
 }
 
@@ -334,7 +334,7 @@ async function doReveal(id: string, master: Uint8Array, meta: ClipMeta, pinRequi
       const res = await fetch(`/api/clip/${id}/reveal`, init);
       if (res.status === 410) return showGone();
       if (res.status === 423) {
-        $("#precard-info").textContent = "too many wrong PINs. This clip is locked until it expires.";
+        $("#precard-info").textContent = "too many wrong PINs. This poof is locked until it expires.";
         show($("#precard-info"), true);
         return;
       }
