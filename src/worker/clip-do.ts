@@ -32,6 +32,14 @@ export type RevealResult =
   | { ok: true; content: Uint8Array }
   | { ok: false; reason: "gone" | "pin_required" | "bad_pin" | "locked"; attemptsLeft?: number };
 
+// Discriminated result for owner-gated burn (ADR-0008). The "gone" reason is
+// not an error: a 1-reveal clip is lazily burned at reveal time, so by the
+// time the creator clicks "delete now" the row is already missing. Only an
+// owner-token mismatch is genuinely forbidden.
+export type DeleteResult =
+  | { ok: true }
+  | { ok: false; reason: "gone" | "forbidden" };
+
 interface Row {
   expires_at: number;
   reveal_budget: number;
@@ -222,12 +230,18 @@ export class ClipDO extends DurableObject<Env> {
   }
 
   // Owner-gated early burn (ADR-0008). The owner token never travels in the
-  // Link, so a link-holder cannot destroy the clip.
-  async deleteWithOwner(token: string): Promise<{ ok: boolean }> {
+  // Link, so a link-holder cannot destroy the clip. A missing row means the
+  // clip is already gone (lazily burned at reveal time, TTL alarm, or never
+  // existed); we surface that as "gone" rather than "forbidden" so the UI can
+  // tell the creator "already burned" instead of a misleading "delete failed."
+  // A row that lost its owner_hash/owner_salt cannot be verified, so it is
+  // treated as forbidden.
+  async deleteWithOwner(token: string): Promise<DeleteResult> {
     const row = this.row();
-    if (!row || !row.owner_hash || !row.owner_salt) return { ok: false };
+    if (!row) return { ok: false, reason: "gone" };
+    if (!row.owner_hash || !row.owner_salt) return { ok: false, reason: "forbidden" };
     const candidate = await sha256B64(row.owner_salt + token);
-    if (candidate !== row.owner_hash) return { ok: false };
+    if (candidate !== row.owner_hash) return { ok: false, reason: "forbidden" };
     await this.burn();
     return { ok: true };
   }

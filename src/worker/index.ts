@@ -158,7 +158,12 @@ async function handleDelete(id: string, env: Env, request: Request): Promise<Res
   const ownerToken = typeof body.ownerToken === "string" ? body.ownerToken : undefined;
   if (!ownerToken) return json({ error: "owner_token_required" }, 400);
   const r = await env.CLIP.getByName(id).deleteWithOwner(ownerToken);
-  return json({ ok: r.ok }, r.ok ? 200 : 403);
+  if (r.ok) return json({ ok: true });
+  // "gone" is not an error: the clip was already burned or expired, so the
+  // creator's intent (destroy it now) is already satisfied. Return 200 so the
+  // UI can show a calm "already gone" rather than a misleading failure.
+  if (r.reason === "gone") return json({ ok: false, reason: "gone" });
+  return json({ ok: false, reason: "forbidden" }, 403);
 }
 
 async function handleMeta(id: string, env: Env): Promise<Response> {

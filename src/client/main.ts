@@ -142,16 +142,29 @@ function initCreate() {
 async function doDeleteNow() {
   if (!lastClipId || !lastOwnerToken) return;
   const status = $("#delete-status");
+  const deleteBtn = $("#delete-now") as HTMLButtonElement;
+  const linkField = $("#link") as HTMLInputElement;
+  const markDead = () => {
+    deleteBtn.disabled = true;
+    linkField.value = "(burned)";
+  };
   try {
     const res = await fetch(`/api/clip/${lastClipId}/delete`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ownerToken: lastOwnerToken }),
     });
-    status.textContent = res.ok ? "burned. the link is now dead." : "delete failed.";
-    if (res.ok) {
-      ($("#delete-now") as HTMLButtonElement).disabled = true;
-      ($("#link") as HTMLInputElement).value = "(burned)";
+    // Parse the body so we can tell "already gone" (a calm outcome, the clip
+    // was lazily burned at reveal/expiry) from a real forbidden/error.
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; reason?: string };
+    if (body.ok === true) {
+      status.textContent = "burned. the link is now dead.";
+      markDead();
+    } else if (body.reason === "gone") {
+      status.textContent = "Already expired or burned. Nothing left to delete.";
+      markDead();
+    } else {
+      status.textContent = "delete failed.";
     }
   } catch {
     status.textContent = "delete failed.";
