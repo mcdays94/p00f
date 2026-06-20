@@ -50,6 +50,8 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
 
   const ttlMs = clampTtl(Number(form.get("ttlMs")));
   const revealBudget = clampBudget(Number(form.get("revealBudget")));
+  const pinRaw = form.get("pin");
+  const pin = typeof pinRaw === "string" && /^\d{4}$/.test(pinRaw) ? pinRaw : undefined;
 
   // The client generates the id so it can salt the key derivation with it
   // before uploading (ADR-0009). Fall back to a server id if absent (tests).
@@ -67,6 +69,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     ttlMs,
     revealBudget,
     size: content.size,
+    pin,
   });
 
   return json({ id });
@@ -85,12 +88,30 @@ async function handleMeta(id: string, env: Env): Promise<Response> {
   });
 }
 
-async function handleReveal(id: string, env: Env): Promise<Response> {
-  const r = await env.CLIP.getByName(id).reveal();
-  if (!r.ok) return json({ error: r.reason }, 410);
-  return new Response(r.content, {
-    headers: { "content-type": "application/octet-stream" },
-  });
+async function handleReveal(id: string, env: Env, request: Request): Promise<Response> {
+  let body: { pin?: unknown; turnstile?: unknown } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    // no body (non-PIN reveal)
+  }
+  const pin = typeof body.pin === "string" ? body.pin : undefined;
+  const turnstile = typeof body.turnstile === "string" ? body.turnstile : undefined;
+
+  // Turnstile gates each PIN submission (ADR-0005).
+  if (pin) {
+    const ok = turnstile
+      ? await verifyTurnstile(turnstile, env.TURNSTILE_SECRET, request.headers.get("CF-Connecting-IP"))
+      : false;
+    if (!ok) return json({ error: "turnstile_failed" }, 403);
+  }
+
+  const r = await env.CLIP.getByName(id).reveal(pin);
+  if (r.ok) {
+    return new Response(r.content, { headers: { "content-type": "application/octet-stream" } });
+  }
+  const status = r.reason === "gone" ? 410 : r.reason === "locked" ? 423 : 401;
+  return json({ error: r.reason, attemptsLeft: r.attemptsLeft }, status);
 }
 
 export default {
@@ -105,7 +126,7 @@ export default {
     if (meta && request.method === "GET") return handleMeta(meta[1], env);
 
     const rev = p.match(/^\/api\/clip\/([^/]+)\/reveal$/);
-    if (rev && request.method === "POST") return handleReveal(rev[1], env);
+    if (rev && request.method === "POST") return handleReveal(rev[1], env, request);
 
     if (p.startsWith("/api/")) return new Response("Not found", { status: 404 });
 

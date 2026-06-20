@@ -54,4 +54,34 @@ describe("Worker API", () => {
     expect((await SELF.fetch(`${base}/api/clip/${id}/reveal`, { method: "POST" })).status).toBe(200);
     expect((await SELF.fetch(`${base}/api/clip/${id}/reveal`, { method: "POST" })).status).toBe(410);
   });
+
+  it("gates a PIN-protected clip via the API", async () => {
+    const fd = createForm({ revealBudget: 5 });
+    fd.set("pin", "4321");
+    const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: fd });
+    const { id } = (await cr.json()) as { id: string };
+
+    const meta = (await (await SELF.fetch(`${base}/api/clip/${id}/meta`)).json()) as { pinRequired: boolean };
+    expect(meta.pinRequired).toBe(true);
+
+    // no PIN -> 401
+    expect((await SELF.fetch(`${base}/api/clip/${id}/reveal`, { method: "POST" })).status).toBe(401);
+
+    // wrong PIN (+ turnstile) -> 401
+    const wrong = await SELF.fetch(`${base}/api/clip/${id}/reveal`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pin: "0000", turnstile: "tok" }),
+    });
+    expect(wrong.status).toBe(401);
+
+    // correct PIN (+ turnstile) -> 200 + content
+    const ok = await SELF.fetch(`${base}/api/clip/${id}/reveal`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pin: "4321", turnstile: "tok" }),
+    });
+    expect(ok.status).toBe(200);
+    expect(Array.from(new Uint8Array(await ok.arrayBuffer()))).toEqual([10, 20, 30]);
+  });
 });

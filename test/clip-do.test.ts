@@ -67,4 +67,37 @@ describe("ClipDO lifecycle", () => {
 
     expect(await s.getMeta()).toEqual({ exists: false });
   });
+
+  it("gates a PIN-protected clip: wrong PIN rejected, correct PIN reveals", async () => {
+    const s = stub("pin1");
+    await s.create({ metadata: b(1), content: b(2, 3), ttlMs: 60_000, revealBudget: 5, size: 2, pin: "1234" });
+
+    const m = await s.getMeta();
+    expect(m.exists && m.pinRequired).toBe(true);
+
+    expect(await s.reveal()).toEqual({ ok: false, reason: "pin_required" });
+
+    const bad = await s.reveal("0000");
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason).toBe("bad_pin");
+
+    const good = await s.reveal("1234");
+    expect(good.ok).toBe(true);
+    if (good.ok) expect(Array.from(good.content)).toEqual([2, 3]);
+  });
+
+  it("locks out after too many wrong PINs, without consuming reveal budget", async () => {
+    const s = stub("pin2");
+    await s.create({ metadata: b(1), content: b(9), ttlMs: 60_000, revealBudget: 1, size: 1, pin: "1234" });
+
+    for (let i = 0; i < 5; i++) await s.reveal("0000");
+
+    const r = await s.reveal("1234"); // correct, but locked out now
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("locked");
+
+    // wrong attempts never spent the single reveal: the clip still exists
+    const m = await s.getMeta();
+    expect(m.exists).toBe(true);
+  });
 });
