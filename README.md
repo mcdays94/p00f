@@ -22,7 +22,7 @@ design. The trust model is spelled out honestly in `SECURITY.md`.
    only the ciphertext.
 2. The server stores the ciphertext in a per-clip Durable Object with a TTL alarm
    and an atomic reveal-budget counter.
-3. The caller builds a Link as `https://p00f.<tld>/c/<id>#<key>`. The `#<key>` part
+3. The caller builds a Link as `https://p00f.me/c/<id>#<key>`. The `#<key>` part
    is never sent to the server.
 4. The recipient opens the Link; their client fetches the ciphertext and decrypts
    it locally. A reveal is spent; when the budget hits zero, the clip burns.

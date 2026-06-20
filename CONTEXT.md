@@ -2,6 +2,8 @@
 
 Poof is a zero-knowledge, ephemeral clipboard-sharing tool built on the Cloudflare developer platform (Workers + Durable Objects). You paste text, code, an image, or a file in the browser; Poof encrypts it locally and hands you a short-lived link to share. The server never sees the contents.
 
+The public brand and domain are `p00f.me` (chosen, via the Cloudflare Registrar). The repo and code identifiers stay `poof` and `clip`. The reusable zero-knowledge engine is published as `@p00f/core` on npm.
+
 ## Language
 
 **Clip**:

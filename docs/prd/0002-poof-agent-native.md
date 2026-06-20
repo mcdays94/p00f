@@ -1,6 +1,6 @@
 # PRD 0002 - p00f v2 (agent-native: CLI, MCP, content negotiation)
 
-p00f v1 (PRD 0001) is a finished zero-knowledge, ephemeral clipboard for a human in a browser. v2 extends it along the agent-native axis: humans and agents hand off transient context, secrets, prompts, and intermediate results by URL, from the CLI, an MCP server, and Code Mode agents, while keeping the zero-knowledge spine of ADR-0001. This PRD does not restate the ADRs; it references them. Brand and domain are `p00f.<tld>`; the repo and code identifiers stay `poof` and `clip`.
+p00f v1 (PRD 0001) is a finished zero-knowledge, ephemeral clipboard for a human in a browser. v2 extends it along the agent-native axis: humans and agents hand off transient context, secrets, prompts, and intermediate results by URL, from the CLI, an MCP server, and Code Mode agents, while keeping the zero-knowledge spine of ADR-0001. This PRD does not restate the ADRs; it references them. Brand and domain are `p00f.me` (via the Cloudflare Registrar); the repo and code identifiers stay `poof` and `clip`.
 
 ## Why
 
