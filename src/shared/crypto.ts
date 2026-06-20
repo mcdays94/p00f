@@ -4,6 +4,12 @@
 
 const enc = new TextEncoder();
 
+// TS 5.7+ types a plain Uint8Array as Uint8Array<ArrayBufferLike>, which the DOM
+// lib's BufferSource rejects (ArrayBufferLike includes SharedArrayBuffer). Our
+// byte arrays are always ArrayBuffer-backed at runtime, so we pass them through
+// as BufferSource. Type-only; no runtime behavior change.
+const buf = (u: Uint8Array): BufferSource => u as BufferSource;
+
 export function randomBytes(n: number): Uint8Array {
   const b = new Uint8Array(n);
   crypto.getRandomValues(b);
@@ -66,7 +72,7 @@ async function deriveAesKey(
     ikm.set(master, 0);
     ikm.set(pinBytes, master.length);
   }
-  const baseKey = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveKey"]);
+  const baseKey = await crypto.subtle.importKey("raw", buf(ikm), "HKDF", false, ["deriveKey"]);
   const info = enc.encode(role === "metadata" ? METADATA_INFO : CONTENT_INFO);
   const salt = enc.encode(clipId);
   return crypto.subtle.deriveKey(
@@ -89,7 +95,7 @@ export async function encryptBlob(
   const key = await deriveAesKey(master, clipId, role, pin);
   const iv = randomBytes(12);
   const ct = new Uint8Array(
-    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext),
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv: buf(iv) }, key, buf(plaintext)),
   );
   const out = new Uint8Array(iv.length + ct.length);
   out.set(iv, 0);
@@ -108,5 +114,5 @@ export async function decryptBlob(
   const key = await deriveAesKey(master, clipId, role, pin);
   const iv = blob.subarray(0, 12);
   const ct = blob.subarray(12);
-  return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct));
+  return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: buf(iv) }, key, buf(ct)));
 }

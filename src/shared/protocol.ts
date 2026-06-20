@@ -46,8 +46,10 @@ export async function createClip(
   if (c.ttlMs != null) fd.set("ttlMs", String(c.ttlMs));
   if (c.revealBudget != null) fd.set("revealBudget", String(c.revealBudget));
   if (c.pin) fd.set("pin", c.pin);
-  fd.set("meta", new Blob([c.metaCipher]));
-  fd.set("content", new Blob([c.contentCipher]));
+  // metaCipher/contentCipher are Uint8Array<ArrayBufferLike>; cast to BlobPart
+  // (the DOM lib wants an ArrayBuffer-backed view). Type-only; no runtime change.
+  fd.set("meta", new Blob([c.metaCipher as BlobPart]));
+  fd.set("content", new Blob([c.contentCipher as BlobPart]));
   const res = await http(`${trimBase(baseUrl)}/api/clip`, { method: "POST", body: fd });
   if (!res.ok) throw new Error(`create failed (${res.status})`);
   return (await res.json()) as { id: string; ownerToken: string };
