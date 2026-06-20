@@ -23,7 +23,6 @@ export type MetaResult =
       exists: true;
       metadata: Uint8Array;
       revealsRemaining: number | null; // null = unlimited
-      expiresAt: number;
       pinRequired: boolean;
       size: number;
     };
@@ -163,11 +162,13 @@ export class ClipDO extends DurableObject<Env> {
     }
     const revealsRemaining =
       row.reveal_budget < 0 ? null : Math.max(0, row.reveal_budget - row.reveals_used);
+    // expires_at is intentionally NOT returned: the deadline lives in the
+    // encrypted metadata now (ADR-0014). The DO still uses row.expires_at above
+    // to enforce the Burn and to schedule the alarm.
     return {
       exists: true,
       metadata: new Uint8Array(row.metadata),
       revealsRemaining,
-      expiresAt: row.expires_at,
       pinRequired: row.pin_hash != null,
       size: row.size,
     };

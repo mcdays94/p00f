@@ -10,7 +10,6 @@ export interface MetaResponse {
   exists: boolean;
   metadata?: Uint8Array; // decoded ciphertext of the metadata blob
   revealsRemaining: number | null;
-  expiresAt?: number;
   pinRequired: boolean;
   size?: number;
 }
@@ -63,7 +62,6 @@ export async function getMeta(http: HttpLike, baseUrl: string, id: string): Prom
     exists: boolean;
     metadata: string;
     revealsRemaining: number | null;
-    expiresAt: number;
     pinRequired: boolean;
     size: number;
   };
@@ -71,7 +69,6 @@ export async function getMeta(http: HttpLike, baseUrl: string, id: string): Prom
     exists: j.exists,
     metadata: j.metadata ? base64urlDecode(j.metadata) : undefined,
     revealsRemaining: j.revealsRemaining,
-    expiresAt: j.expiresAt,
     pinRequired: j.pinRequired,
     size: j.size,
   };

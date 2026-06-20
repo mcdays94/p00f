@@ -18,7 +18,6 @@ describe("wire format contract", () => {
     const env = buildEnvelope({
       id: "abc",
       revealsRemaining: 1,
-      expiresAt: 123,
       pinRequired: false,
       size: 42,
       metadata: new Uint8Array([1, 2, 3, 4]),
@@ -28,6 +27,9 @@ describe("wire format contract", () => {
     expect(env.metadata).toBeTruthy();
     // The exact size is never a cleartext field; only the coarse bucket is.
     expect(env).not.toHaveProperty("size");
+    // The expiry deadline moved into the encrypted metadata (ADR-0014); it must
+    // not appear as a cleartext envelope field.
+    expect(env).not.toHaveProperty("expiresAt");
   });
 
   it("publishes the same HKDF info strings the crypto derivation uses", () => {

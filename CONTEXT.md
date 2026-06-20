@@ -30,6 +30,10 @@ _Avoid_: view, open, read (use Reveal for the budget-consuming action specifical
 Permanent destruction of a Clip's ciphertext, triggered when its TTL expires or its reveal budget reaches zero, whichever comes first.
 _Avoid_: delete, expire (Burn covers both triggers).
 
+**Countdown**:
+The recipient-facing view of a Clip's remaining time before its TTL Burn. Rendered client-side from the `expiresAt` carried in the Clip's encrypted metadata (so only a Fragment-Key holder can read the deadline), on by default and controllable by the creator. When it reaches zero on an open page the revealed content auto-clears: a best-effort UX affordance, not a confidentiality control, since an already-revealed Clip may have been copied (ADR-0014).
+_Avoid_: timer, TTL bar (reserve "Countdown" for this recipient-facing remaining-time view).
+
 **Reveal budget**:
 The number of times a Clip may be revealed before it burns. Default 1. Counts Reveals (ciphertext releases), not distinct users.
 _Avoid_: views, reads, "number of users".
@@ -73,3 +77,4 @@ _Avoid_: admin key, management password, delete key.
 - "read by X users" was used for the burn limit. Resolved: with no identity to dedupe on, we count **Reveals** (ciphertext releases), not users. The canonical term is **Reveal budget** and the UI says "reveals," never "users."
 - A "URL shortener" was requested but rejected: a server-resolvable short link would break Zero-Knowledge (ADR-0001, ADR-0010), and a poof Link cannot be short because it carries the Fragment Key. Resolved: the **Masked URL** Kind (`url`) masks a destination behind a Link without shortening it or resolving it server-side (ADR-0013).
 - "Kind" was originally a fixed four-way set (text, code, image, file). It has since grown (secret in v2, url for masked links) and is now an open set of understood values; the term no longer implies exactly four.
+- The TTL deadline was a cleartext envelope field. Resolved (ADR-0014): it moved into the Clip's encrypted metadata so only a Fragment-Key holder can read it (real privacy from the server and API scrapers). The server keeps its own authoritative expiry to run the Burn but no longer publishes it; the recipient-facing **Countdown** is rendered from the decrypted metadata.

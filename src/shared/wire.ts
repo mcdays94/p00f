@@ -21,7 +21,6 @@ export function sizeBucket(n: number): string {
 export interface Envelope {
   id: string;
   revealsRemaining: number | null; // null = unlimited until expiry
-  expiresAt: number;
   pinRequired: boolean;
   hasContent: boolean;
   sizeBucket: string;
@@ -31,7 +30,6 @@ export interface Envelope {
 export function buildEnvelope(input: {
   id: string;
   revealsRemaining: number | null;
-  expiresAt: number;
   pinRequired: boolean;
   size: number;
   metadata: Uint8Array;
@@ -39,7 +37,6 @@ export function buildEnvelope(input: {
   return {
     id: input.id,
     revealsRemaining: input.revealsRemaining,
-    expiresAt: input.expiresAt,
     pinRequired: input.pinRequired,
     hasContent: true,
     sizeBucket: sizeBucket(input.size),
@@ -65,9 +62,9 @@ export const WIRE_FORMAT = {
     nonce: "12 random bytes (IV), prepended to the ciphertext: layout is iv(12) || ciphertext+tag.",
   },
   envelope: {
-    cleartext: ["id", "revealsRemaining", "expiresAt", "pinRequired", "hasContent", "sizeBucket"],
-    encrypted: "metadata: base64url AES-GCM ciphertext of the JSON { kind, filename, mime, size }",
-    note: "The exact kind, filename, mime, and size are inside the encrypted metadata blob, never in cleartext.",
+    cleartext: ["id", "revealsRemaining", "pinRequired", "hasContent", "sizeBucket"],
+    encrypted: "metadata: base64url AES-GCM ciphertext of the JSON { kind, filename, mime, size, expiresAt, showCountdown }",
+    note: "The exact kind, filename, mime, size, and the expiry deadline (expiresAt) are inside the encrypted metadata blob, never in cleartext (ADR-0014).",
   },
 } as const;
 

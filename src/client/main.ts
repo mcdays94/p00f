@@ -404,14 +404,18 @@ async function doCreate() {
     const id = generateClipId();
     const pinRaw = ($("#pin") as HTMLInputElement).value.trim();
     const pin = /^\d{4}$/.test(pinRaw) ? pinRaw : undefined;
+    const ttlMs = Number(($("#ttl") as HTMLSelectElement).value);
 
-    const metaCipher = await encryptBlob(master, id, "metadata", te.encode(JSON.stringify(pending.meta)));
+    // Stamp the expiry deadline into the encrypted metadata (ADR-0014) so the
+    // recipient can render a private countdown; the server never sees it.
+    const meta = { ...pending.meta, expiresAt: Date.now() + ttlMs };
+    const metaCipher = await encryptBlob(master, id, "metadata", te.encode(JSON.stringify(meta)));
     const contentCipher = await encryptBlob(master, id, "content", pending.bytes, pin);
 
     const fd = new FormData();
     fd.set("id", id);
     fd.set("turnstile", turnstileToken());
-    fd.set("ttlMs", ($("#ttl") as HTMLSelectElement).value);
+    fd.set("ttlMs", String(ttlMs));
     fd.set("revealBudget", ($("#budget") as HTMLSelectElement).value);
     if (pin) fd.set("pin", pin);
     fd.set("meta", new Blob([metaCipher]));

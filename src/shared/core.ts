@@ -19,6 +19,13 @@ export interface ClipMeta {
   filename?: string;
   mime?: string;
   size: number;
+  // Expiry deadline (epoch ms) lives in the ENCRYPTED metadata so only a
+  // Fragment-Key holder can read it (ADR-0014). The server keeps its own
+  // authoritative expiry to run the Burn but no longer publishes it.
+  expiresAt?: number;
+  // Creator preference: show the recipient a countdown (default on). UI-level
+  // only, since the revealer holds the key.
+  showCountdown?: boolean;
 }
 
 export interface CreateInput {
@@ -39,7 +46,11 @@ export interface CreatedClip {
 export async function create(http: HttpLike, baseUrl: string, input: CreateInput): Promise<CreatedClip> {
   const master = generateMasterKey();
   const id = generateClipId();
-  const metaCipher = await encryptBlob(master, id, "metadata", te.encode(JSON.stringify(input.meta)));
+  // Stamp the expiry deadline into the encrypted metadata (ADR-0014) so the
+  // recipient can render a private countdown. Default mirrors the server's TTL.
+  const ttlMs = input.ttlMs ?? 5 * 60_000;
+  const meta: ClipMeta = { ...input.meta, expiresAt: input.meta.expiresAt ?? Date.now() + ttlMs };
+  const metaCipher = await encryptBlob(master, id, "metadata", te.encode(JSON.stringify(meta)));
   const contentCipher = await encryptBlob(master, id, "content", input.content, input.pin);
   const { id: serverId, ownerToken } = await createClip(http, baseUrl, {
     id,
@@ -77,7 +88,8 @@ export async function info(http: HttpLike, link: string): Promise<ClipInfo> {
     meta,
     revealsRemaining: m.revealsRemaining,
     pinRequired: m.pinRequired,
-    expiresAt: m.expiresAt,
+    // Expiry now comes from the decrypted metadata, not a cleartext field (ADR-0014).
+    expiresAt: meta?.expiresAt,
   };
 }
 

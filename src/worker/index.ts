@@ -173,7 +173,6 @@ async function handleMeta(id: string, env: Env): Promise<Response> {
     exists: true,
     metadata: base64urlEncode(m.metadata),
     revealsRemaining: m.revealsRemaining,
-    expiresAt: m.expiresAt,
     pinRequired: m.pinRequired,
     size: m.size,
   });
@@ -189,7 +188,6 @@ async function handleEnvelope(id: string, env: Env): Promise<Response> {
     buildEnvelope({
       id,
       revealsRemaining: m.revealsRemaining,
-      expiresAt: m.expiresAt,
       pinRequired: m.pinRequired,
       size: m.size,
       metadata: m.metadata,
