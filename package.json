@@ -6,8 +6,10 @@
     "build:client": "esbuild src/client/main.ts --bundle --format=esm --outfile=public/app.js --sourcemap",
     "dev": "npm run build:client && wrangler dev",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:cli": "esbuild src/cli/poof.ts --bundle --platform=node --format=esm --outfile=bin/poof.mjs --banner:js='#!/usr/bin/env node'"
   },
+  "bin": { "poof": "bin/poof.mjs" },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.18",
     "@cloudflare/workers-types": "^4.20260619.1",

@@ -7,3 +7,5 @@ public/app.js.map
 .DS_Store
 .dev.vars
 HANDOFF.md
+bin/
+skill-observations/
