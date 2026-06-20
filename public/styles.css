@@ -70,6 +70,11 @@ select { background: var(--surface-2); color: var(--text); border: 1px solid var
 .clip-pre { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow: auto; }
 .clip-pre code { font-family: var(--mono); font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .clip-img { max-width: 100%; border-radius: 10px; border: 1px solid var(--line); }
+/* Revealed content renders inside an opaque-origin sandbox (ADR-0012). */
+.clip-frame { width: 100%; min-height: 120px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.secret-mask { font-family: var(--mono); font-size: 16px; letter-spacing: 0.3em; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 0; }
+.secret-toggle { flex-direction: row; align-items: center; gap: 8px; }
+.secret-toggle input { accent-color: var(--coral); }
 .actions { display: flex; gap: 8px; margin-top: 12px; }
 .gone { text-align: center; }
 .poof { font-size: 28px; font-weight: 700; color: var(--coral); letter-spacing: -0.02em; margin: 6px 0; }

@@ -112,6 +112,17 @@ describe("POOF-13: content negotiation, discovery, request hygiene", () => {
     expect(doc.endpoints.reveal).toContain("/api/clip/");
   });
 
+  it("serves the reveal sandbox document with its own framable CSP (ADR-0012)", async () => {
+    const res = await SELF.fetch(`${base}/sandbox.html`);
+    expect(res.status).toBe(200); // worker-served, not a .html redirect
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("script-src 'unsafe-inline'"); // its own bootstrap may run
+    expect(csp).toContain("frame-ancestors 'self'"); // the app may embed it
+    expect(csp).not.toContain("frame-ancestors 'none'");
+    expect(await res.text()).toContain("poof-sandbox-ready");
+  });
+
   it("publishes the wire format at /llms.txt", async () => {
     const res = await SELF.fetch(`${base}/llms.txt`);
     expect(res.status).toBe(200);

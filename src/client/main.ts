@@ -8,17 +8,15 @@ import {
   base64urlDecode,
 } from "../shared/crypto";
 import { buildLink } from "../shared/link";
+import type { ClipMeta } from "../shared/core";
+import { decideRender, buildSandboxMessage, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
 
-type Kind = "text" | "code" | "image" | "file";
-interface ClipMeta {
-  kind: Kind;
-  filename?: string;
-  mime?: string;
-  size: number;
-}
+// kind is an arbitrary string carried inside the encrypted metadata (POOF-14);
+// the server never learns it. The web app understands text, code, image, file,
+// and secret, and falls back to text-or-download for anything else.
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const show = (el: HTMLElement, on: boolean) => {
@@ -65,9 +63,11 @@ function clearPending() {
   ($("#create-btn") as HTMLButtonElement).disabled = true;
 }
 
+const secretOn = () => ($("#secret") as HTMLInputElement | null)?.checked ?? false;
+
 async function loadFile(f: File) {
   const buf = new Uint8Array(await f.arrayBuffer());
-  const kind: Kind = f.type.startsWith("image/") ? "image" : "file";
+  const kind: string = f.type.startsWith("image/") ? "image" : "file";
   ($("#text") as HTMLTextAreaElement).value = "";
   setPending(buf, { kind, filename: f.name, mime: f.type || "application/octet-stream", size: buf.length });
 }
@@ -84,11 +84,17 @@ function initCreate() {
   show($("#create-page"), true);
   const ta = $("#text") as HTMLTextAreaElement;
 
-  ta.addEventListener("input", () => {
+  const recomputeText = () => {
     const v = ta.value;
     if (!v) return clearPending();
     const bytes = te.encode(v);
-    setPending(bytes, { kind: looksLikeCode(v) ? "code" : "text", mime: "text/plain", size: bytes.length });
+    const kind = secretOn() ? "secret" : looksLikeCode(v) ? "code" : "text";
+    setPending(bytes, { kind, mime: "text/plain", size: bytes.length });
+  };
+  ta.addEventListener("input", recomputeText);
+  // Toggling secret re-kinds pending text (a file keeps its image/file kind).
+  $("#secret")?.addEventListener("change", () => {
+    if (ta.value) recomputeText();
   });
 
   ta.addEventListener("paste", (e) => {
@@ -317,27 +323,72 @@ function actionButton(label: string, onClick: () => void): HTMLButtonElement {
   return b;
 }
 
-function download(bytes: Uint8Array, meta: ClipMeta) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: meta.mime ?? "application/octet-stream" }));
+function download(bytes: Uint8Array, filename: string, mime: string) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = meta.filename ?? "clip";
+  a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Mount the revealed content in an opaque-origin sandboxed iframe (ADR-0012).
+// sandbox="allow-scripts" without allow-same-origin gives the frame a unique
+// opaque origin: even if a payload ran inside, it could not read the parent's
+// location.hash (the Fragment Key), cookies, or storage. The frame loads the
+// real /sandbox.html document (a real URL does not inherit the parent's strict
+// CSP, unlike a blob/srcdoc/data frame). Plaintext bytes are handed in by
+// postMessage only after the sandbox signals ready; the key is never posted.
+function mountSandbox(host: HTMLElement, message: SandboxMessage) {
+  const iframe = document.createElement("iframe");
+  iframe.className = "clip-frame";
+  iframe.setAttribute("sandbox", "allow-scripts");
+  iframe.src = "/sandbox.html";
+  const onMsg = (e: MessageEvent) => {
+    if (e.source !== iframe.contentWindow) return;
+    if (e.data === "poof-sandbox-ready") {
+      iframe.contentWindow?.postMessage(message, "*");
+      window.removeEventListener("message", onMsg);
+    }
+  };
+  window.addEventListener("message", onMsg);
+  host.appendChild(iframe);
 }
 
 function renderContent(bytes: Uint8Array, meta: ClipMeta) {
   const host = $("#content");
   host.innerHTML = "";
+  const decision = decideRender(meta, bytes);
   const actions = document.createElement("div");
   actions.className = "actions";
 
-  if (meta.kind === "image") {
-    const url = URL.createObjectURL(new Blob([bytes], { type: meta.mime ?? "image/*" }));
-    const img = document.createElement("img");
-    img.className = "clip-img";
-    img.src = url;
-    host.appendChild(img);
+  if (decision.mode === "download") {
+    const p = document.createElement("p");
+    p.className = "muted";
+    p.textContent = `${meta.filename ?? meta.kind} · ${formatSize(meta.size)} · download only`;
+    host.appendChild(p);
+    actions.appendChild(
+      actionButton("download", () =>
+        download(bytes, decision.filename ?? meta.filename ?? "clip", decision.mime ?? "application/octet-stream"),
+      ),
+    );
+  } else if (decision.mode === "secret") {
+    // Masked until the viewer chooses to show it (shoulder-surfing guard). Copy
+    // works without putting the value on screen. Showing renders in the sandbox.
+    const mask = document.createElement("p");
+    mask.className = "secret-mask";
+    mask.textContent = "\u2022".repeat(16);
+    host.insertBefore(mask, null);
+    const showBtn = actionButton("show", () => {
+      mask.remove();
+      showBtn.remove();
+      mountSandbox(host, buildSandboxMessage({ mode: "text" }, bytes));
+    });
+    const copyBtn = actionButton("copy", () => copyText(td.decode(bytes), copyBtn));
+    actions.appendChild(showBtn);
+    actions.appendChild(copyBtn);
+  } else if (decision.mode === "image") {
+    mountSandbox(host, buildSandboxMessage(decision, bytes));
     actions.appendChild(
       actionButton("copy image", async () => {
         try {
@@ -349,21 +400,11 @@ function renderContent(bytes: Uint8Array, meta: ClipMeta) {
         }
       }),
     );
-    actions.appendChild(actionButton("download", () => download(bytes, meta)));
-  } else if (meta.kind === "file") {
-    const p = document.createElement("p");
-    p.className = "muted";
-    p.textContent = `${meta.filename ?? "file"} · ${formatSize(meta.size)}`;
-    host.appendChild(p);
-    actions.appendChild(actionButton("download", () => download(bytes, meta)));
+    actions.appendChild(actionButton("download", () => download(bytes, meta.filename ?? "image", meta.mime ?? "image/png")));
   } else {
+    // text / code / unknown-but-UTF8
     const text = td.decode(bytes);
-    const pre = document.createElement("pre");
-    pre.className = "clip-pre";
-    const code = document.createElement("code");
-    code.textContent = text;
-    pre.appendChild(code);
-    host.appendChild(pre);
+    mountSandbox(host, buildSandboxMessage(decision, bytes));
     const copyBtn = actionButton("copy", () => copyText(text, copyBtn));
     actions.appendChild(copyBtn);
   }

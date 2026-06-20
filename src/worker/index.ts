@@ -2,6 +2,7 @@ import { ClipDO } from "./clip-do";
 import type { Env } from "./types";
 import { generateClipId, base64urlEncode, generateOwnerToken } from "../shared/crypto";
 import { buildEnvelope, discoveryDoc, llmsTxt } from "../shared/wire";
+import { SANDBOX_HTML, SANDBOX_CSP } from "../shared/sandbox-doc";
 import { verifyTurnstile } from "./turnstile";
 import { sha256B64, randomSaltB64 } from "./hash";
 
@@ -30,6 +31,25 @@ const CORS: Record<string, string> = {
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type",
 };
+
+// CSP for the key-holding app document (ADR-0012). The load-bearing clause is
+// script-src WITHOUT 'unsafe-inline': an injected inline script cannot execute,
+// so it cannot read location.hash (the Fragment Key). app.js is an external
+// module from 'self'; Turnstile loads its script and iframe from its origin;
+// the reveal sandbox is a blob: iframe. The sandbox itself carries its own,
+// separate minimal CSP (see buildSandboxHtml).
+const APP_CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://challenges.cloudflare.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' blob: data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "frame-src 'self' blob: https://challenges.cloudflare.com",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+].join("; ");
 
 // Request hygiene applied to every worker-generated response (PRD 0002): a
 // no-referrer policy and credential-less CORS always; no-store plus a cache
@@ -222,6 +242,20 @@ export default {
     }
     if (p === "/" && wantsJson) return harden(json(discoveryDoc(url.origin)), { vary: true });
 
+    // The reveal sandbox document (ADR-0012). Served by the worker (not assets)
+    // so it gets its own CSP and is not subject to the .html redirect or SPA
+    // fallback. It must NOT carry the app's frame-ancestors 'none', so the app
+    // can embed it.
+    if (p === "/sandbox.html" && method === "GET") {
+      return new Response(SANDBOX_HTML, {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "content-security-policy": SANDBOX_CSP,
+          "referrer-policy": "no-referrer",
+        },
+      });
+    }
+
     if (p === "/api/clip" && method === "POST") {
       return harden(await handleCreate(request, env), { noStore: true });
     }
@@ -250,7 +284,15 @@ export default {
     if (p.startsWith("/api/")) return harden(new Response("Not found", { status: 404 }));
 
     // Non-API routes are served by static assets (see wrangler run_worker_first):
-    // the SPA shell, including the bare /c/:id reveal page and the HTML root.
-    return env.ASSETS.fetch(request);
+    // the SPA shell, including the bare /c/:id reveal page and the HTML root. The
+    // HTML document holds the Fragment Key, so it carries a strict CSP (ADR-0012).
+    const res = await env.ASSETS.fetch(request);
+    if ((res.headers.get("content-type") ?? "").includes("text/html")) {
+      const h = new Headers(res.headers);
+      h.set("content-security-policy", APP_CSP);
+      h.set("referrer-policy", "no-referrer");
+      return new Response(res.body, { status: res.status, headers: h });
+    }
+    return res;
   },
 };
