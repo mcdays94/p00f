@@ -115,4 +115,18 @@ describe("ClipDO lifecycle", () => {
     expect((await s.deleteWithOwner(token)).ok).toBe(true);
     expect(await s.getMeta()).toEqual({ exists: false });
   });
+
+  it("stores over-threshold content in R2 and reveals it round-trip", async () => {
+    const s = stub("r2a");
+    const big = b(5, 6, 7, 8, 9);
+    // a tiny inlineMax forces the R2 path without needing a large payload
+    await s.create({ metadata: b(1), content: big, ttlMs: 60_000, revealBudget: 1, size: 5, inlineMax: 2 });
+
+    const r = await s.reveal();
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(Array.from(r.content)).toEqual([5, 6, 7, 8, 9]);
+
+    // budget was 1, so it burned (and the R2 object was deleted)
+    expect(await s.getMeta()).toEqual({ exists: false });
+  });
 });

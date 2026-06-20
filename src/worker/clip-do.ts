@@ -14,6 +14,7 @@ export interface CreateInput {
   pin?: string;
   ownerHash?: string;
   ownerSalt?: string;
+  inlineMax?: number; // content larger than this goes to R2
 }
 
 export type MetaResult =
@@ -38,6 +39,7 @@ interface Row {
   size: number;
   metadata: ArrayBuffer;
   content: ArrayBuffer | null;
+  r2_key: string | null;
   pin_hash: string | null;
   pin_salt: string | null;
   pin_iters: number | null;
@@ -86,7 +88,7 @@ export class ClipDO extends DurableObject<Env> {
     try {
       const rows = this.ctx.storage.sql
         .exec<Row>(
-          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt FROM clip WHERE id = 1",
+          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt FROM clip WHERE id = 1",
         )
         .toArray();
       return rows.length ? rows[0] : null;
@@ -110,14 +112,26 @@ export class ClipDO extends DurableObject<Env> {
       pinHash = await pbkdf2B64(input.pin, pinSalt, pinIters);
     }
 
+    // Large content goes to R2 as ciphertext; small content stays inline in the
+    // DO (ADR-0006). The DO holds the R2 key and proxies bytes on reveal.
+    const inlineMax = input.inlineMax ?? Number.POSITIVE_INFINITY;
+    let contentBlob: Uint8Array | null = input.content;
+    let r2Key: string | null = null;
+    if (input.content.byteLength > inlineMax) {
+      r2Key = "c/" + randomSaltB64();
+      await this.env.R2.put(r2Key, input.content);
+      contentBlob = null;
+    }
+
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       now,
       expiresAt,
       input.revealBudget,
       input.size,
       input.metadata,
-      input.content,
+      contentBlob,
+      r2Key,
       pinHash,
       pinSalt,
       pinIters,
@@ -188,9 +202,16 @@ export class ClipDO extends DurableObject<Env> {
       }
     }
 
-    if (!row.content) return { ok: false, reason: "gone" };
-
-    const content = new Uint8Array(row.content);
+    let content: Uint8Array;
+    if (row.content) {
+      content = new Uint8Array(row.content);
+    } else if (row.r2_key) {
+      const obj = await this.env.R2.get(row.r2_key);
+      if (!obj) return { ok: false, reason: "gone" };
+      content = new Uint8Array(await obj.arrayBuffer());
+    } else {
+      return { ok: false, reason: "gone" };
+    }
     const used = row.reveals_used + 1;
     if (row.reveal_budget >= 0 && used >= row.reveal_budget) {
       await this.burn();
@@ -215,10 +236,18 @@ export class ClipDO extends DurableObject<Env> {
   // the load-bearing step; storage.deleteAll() does not reliably clear SQLite
   // table rows across runtimes (ADR-0002, ADR-0006).
   async burn(): Promise<void> {
+    const row = this.row();
     try {
       await this.ctx.storage.deleteAlarm();
     } catch {
       // no alarm scheduled
+    }
+    if (row?.r2_key) {
+      try {
+        await this.env.R2.delete(row.r2_key);
+      } catch {
+        // best-effort R2 cleanup
+      }
     }
     try {
       this.ctx.storage.sql.exec("DELETE FROM clip");

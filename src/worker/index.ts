@@ -77,6 +77,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     pin,
     ownerHash,
     ownerSalt,
+    inlineMax: Number(env.INLINE_MAX_BYTES),
   });
 
   return json({ id, ownerToken });
