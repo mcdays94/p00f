@@ -30,6 +30,13 @@
           </div>
         </div>
 
+        <div id="url-suggest" class="url-suggest" hidden>
+          <label class="url-toggle">
+            <input id="url-mode" type="checkbox" data-testid="url-mode" />
+            <span>Looks like a link. Share as a masked link?</span>
+          </label>
+        </div>
+
         <div class="options">
           <label>burns after
             <select id="ttl">
@@ -47,22 +54,20 @@
               <option value="-1">unlimited reveals</option>
             </select>
           </label>
-          <label>PIN (optional)
-            <input id="pin" class="pin-input" type="text" inputmode="numeric" maxlength="4" placeholder="4 digits" data-testid="pin" />
-          </label>
-          <label class="secret-toggle">secret
-            <input id="secret" type="checkbox" data-testid="secret" />
-          </label>
+          <div id="ts-widget" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark"></div>
         </div>
 
-        <div id="url-suggest" class="url-suggest" hidden>
-          <label class="url-toggle">
-            <input id="url-mode" type="checkbox" data-testid="url-mode" />
-            <span>Looks like a link. Share as a masked link?</span>
-          </label>
-        </div>
-
-        <div id="ts-widget" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark"></div>
+        <details class="advanced more-options">
+          <summary>more options</summary>
+          <div class="options">
+            <label>PIN (optional)
+              <input id="pin" class="pin-input" type="text" inputmode="numeric" maxlength="4" placeholder="4 digits" data-testid="pin" />
+            </label>
+            <label class="secret-toggle">secret
+              <input id="secret" type="checkbox" data-testid="secret" />
+            </label>
+          </div>
+        </details>
 
         <button id="create-btn" class="poof-btn" data-testid="create-btn" disabled aria-label="create poof">
           <canvas class="poof-field" aria-hidden="true"></canvas>

@@ -52,8 +52,16 @@ body {
 .file-btn { font-family: var(--mono); font-size: 12px; color: var(--coral); cursor: pointer; }
 .kind { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 
-.options { display: flex; flex-wrap: wrap; gap: 16px; margin: 18px 0; }
+.options { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin: 18px 0; }
 .options label { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+/* The Turnstile widget now lives at the right of the options row (its own
+   fixed-size iframe). Drop the standalone block margin so it bottom-aligns
+   with the selects; the reveal-side #reveal-ts keeps the .cf-turnstile margin. */
+.options .cf-turnstile { margin: 0; }
+/* PIN + secret moved behind a collapsed "more options" disclosure (progressive
+   disclosure). Reuses the .advanced summary styling; tighten the inner row. */
+.more-options { margin: 16px 0; }
+.more-options .options { align-items: flex-start; margin: 12px 0 0; }
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -93,7 +101,7 @@ select:focus { outline: none; border-color: var(--coral); }
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 128px;
+  height: 77px;
   margin: 4px 0;
   padding: 0;
   border: 1px solid var(--line);
