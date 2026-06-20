@@ -13,6 +13,11 @@
   --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 * { box-sizing: border-box; }
+/* The show() helper in src/client/main.ts toggles el.hidden; ensure the
+   HTML hidden attribute always wins over author display rules (.page,
+   #pin-entry, etc.). Without !important, author display:flex beats the
+   UA [hidden]{display:none} rule regardless of specificity. */
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body {
   background:
