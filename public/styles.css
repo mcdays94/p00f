@@ -83,6 +83,36 @@ select:focus { outline: none; border-color: var(--coral); }
 .btn.primary:hover { background: #ff7a7a; }
 .btn.ghost { background: transparent; }
 
+/* Composite create button (V6): a centerpiece that idles as a drifting glyph
+   field with a label looping between "create poof" and the bash command
+   "$ poof" via a quick ascii scramble; clicking sweeps an ascii smoke ring on
+   the same canvas while the poof is created, then the link panel takes over. */
+.poof-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 128px;
+  margin: 4px 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+.poof-btn::before, .poof-btn::after { content: ""; position: absolute; width: 9px; height: 9px; border-color: var(--coral); opacity: 0.7; }
+.poof-btn::before { top: 7px; left: 7px; border-top: 2px solid; border-left: 2px solid; }
+.poof-btn::after { bottom: 7px; right: 7px; border-bottom: 2px solid; border-right: 2px solid; }
+.poof-btn:hover:not(:disabled) { border-color: var(--coral); }
+.poof-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.poof-field { position: absolute; inset: 0; width: 100%; height: 100%; }
+.poof-label { position: relative; font-family: var(--mono); font-size: 26px; letter-spacing: 0.01em; color: var(--text); white-space: pre; transition: color 0.15s; }
+.poof-label.scrambling { color: var(--coral); }
+.poof-label .pr { color: var(--green); }
+
 .link-row { display: flex; gap: 8px; }
 /* The link field is click-to-copy (#16): the whole input is a copy affordance,
    not just the dedicated button. Pointer cursor signals the click-to-copy. */

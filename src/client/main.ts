@@ -71,6 +71,9 @@ let pending: { bytes: Uint8Array; meta: ClipMeta } | null = null;
 let lastClipId = "";
 let lastOwnerToken = "";
 
+// Composite create button (V6) controller, set up in initCreate.
+let btnCtl: { startRing: () => void; stopRing: () => void; startIdle: () => void } | null = null;
+
 function setPending(bytes: Uint8Array, meta: ClipMeta) {
   pending = { bytes, meta };
   $("#kind").textContent =
@@ -104,6 +107,7 @@ function turnstileToken(): string {
 
 function initCreate() {
   show($("#create-page"), true);
+  btnCtl = setupCreateButton();
   const ta = $("#text") as HTMLTextAreaElement;
 
   const urlSuggest = $("#url-suggest");
@@ -229,12 +233,172 @@ async function doDeleteNow() {
   show(status, true);
 }
 
+// The create button is a small interactive scene on a canvas: a drifting glyph
+// field at rest, a mono label that loops "create poof" <-> the bash command
+// "$ poof" via an ascii scramble (no hover; works on touch), and on submit an
+// ascii smoke ring that sweeps the whole button while the poof is created.
+function setupCreateButton(): { startRing: () => void; stopRing: () => void; startIdle: () => void } | null {
+  const btn = document.querySelector("#create-btn") as HTMLButtonElement | null;
+  const cv = btn?.querySelector(".poof-field") as HTMLCanvasElement | null;
+  const label = btn?.querySelector(".poof-label") as HTMLElement | null;
+  const ctx = cv?.getContext("2d");
+  if (!btn || !cv || !label || !ctx) return null;
+
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let W = 0;
+  let H = 0;
+  const fit = () => {
+    const r = btn.getBoundingClientRect();
+    W = r.width;
+    H = r.height;
+    cv.width = Math.max(1, W * dpr);
+    cv.height = Math.max(1, H * dpr);
+    cv.style.width = W + "px";
+    cv.style.height = H + "px";
+  };
+  fit();
+  window.addEventListener("resize", fit);
+
+  const glyphs = "01<>/{}#*·°".split("");
+  const bg = Array.from({ length: 34 }, () => ({
+    x: Math.random() * Math.max(W, 1),
+    y: Math.random() * Math.max(H, 1),
+    ch: glyphs[(Math.random() * glyphs.length) | 0],
+    a: 0.05 + Math.random() * 0.12,
+    vy: -(4 + Math.random() * 9),
+  }));
+  let fieldRaf = 0;
+  function fieldFrame() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '12px "SF Mono", ui-monospace, monospace';
+    ctx.textAlign = "start";
+    ctx.textBaseline = "alphabetic";
+    for (const g of bg) {
+      g.y += g.vy / 60;
+      if (g.y < 0) {
+        g.y = H;
+        g.x = Math.random() * W;
+      }
+      ctx.fillStyle = `rgba(237,237,237,${g.a})`;
+      ctx.fillText(g.ch, g.x, g.y);
+    }
+    fieldRaf = requestAnimationFrame(fieldFrame);
+  }
+
+  const LABEL = "create poof";
+  const CMD = "$ poof";
+  const SCR = "!<>-_\\/[]{}=+*?#@%".split("");
+  let sraf = 0;
+  let timer = 0;
+  const settle = (html: string) => {
+    label.classList.remove("scrambling");
+    label.innerHTML = html;
+  };
+  function scramble(from: string, to: string, dur: number, onDone: () => void) {
+    const n = Math.max(from.length, to.length);
+    const q: { f: string; t: string; s: number; e: number; c: string }[] = [];
+    for (let i = 0; i < n; i++) {
+      const s = Math.floor(Math.random() * dur * 0.4);
+      q.push({ f: from[i] || "", t: to[i] || "", s, e: s + Math.floor(dur * 0.35 + Math.random() * dur * 0.35), c: "" });
+    }
+    const t0 = performance.now();
+    label.classList.add("scrambling");
+    const step = (now: number) => {
+      const t = now - t0;
+      let out = "";
+      let done = 0;
+      for (const it of q) {
+        if (t >= it.e) {
+          done++;
+          out += it.t;
+        } else if (t >= it.s) {
+          if (!it.c || Math.random() < 0.3) it.c = SCR[(Math.random() * SCR.length) | 0];
+          out += it.c;
+        } else out += it.f;
+      }
+      label.textContent = out;
+      if (done === q.length) {
+        onDone();
+        return;
+      }
+      sraf = requestAnimationFrame(step);
+    };
+    sraf = requestAnimationFrame(step);
+  }
+  const toCmd = () => scramble(LABEL, CMD, 300, () => { settle('<span class="pr">$</span> poof'); timer = window.setTimeout(toLabel, 1300); });
+  const toLabel = () => scramble(CMD, LABEL, 300, () => { settle("create poof"); timer = window.setTimeout(toCmd, 3000); });
+
+  function startIdle() {
+    cancelAnimationFrame(ringRaf);
+    label.style.visibility = "visible";
+    settle("create poof");
+    clearTimeout(timer);
+    timer = window.setTimeout(toCmd, 3000);
+    cancelAnimationFrame(fieldRaf);
+    fieldFrame();
+  }
+  function stopIdle() {
+    clearTimeout(timer);
+    cancelAnimationFrame(sraf);
+    cancelAnimationFrame(fieldRaf);
+  }
+
+  let ringRaf = 0;
+  function startRing() {
+    stopIdle();
+    label.style.visibility = "hidden";
+    const t0 = performance.now();
+    const ring = (now: number) => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const fs = 16;
+      ctx.font = fs + 'px "SF Mono", ui-monospace, monospace';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const cw = ctx.measureText("M").width || fs * 0.6;
+      const lh = Math.round(fs * 1.15);
+      const cols = Math.max(8, Math.floor(W / cw));
+      const rows = Math.max(5, Math.floor(H / lh));
+      const cx = (cols - 1) / 2;
+      const cy = (rows - 1) / 2;
+      const aspect = lh / cw;
+      const pal = ["✦", "*", "o", "°", "·"];
+      const maxD = Math.hypot(cx, cy * aspect) + pal.length;
+      const period = 520; // ms per sweep; loops while the create request is in flight
+      const F = (((now - t0) % period) / period) * maxD;
+      for (let y = 0; y < rows; y++)
+        for (let x = 0; x < cols; x++) {
+          const d = Math.hypot(x - cx, (y - cy) * aspect);
+          const k = Math.round(F - d);
+          if (k >= 0 && k < pal.length) {
+            ctx.fillStyle = k === 0 ? "#ff6363" : `rgba(255,99,99,${Math.max(0.15, 0.8 - k * 0.16)})`;
+            ctx.fillText(pal[k], (x + 0.5) * cw, (y + 0.5) * lh);
+          }
+        }
+      ringRaf = requestAnimationFrame(ring);
+    };
+    ringRaf = requestAnimationFrame(ring);
+  }
+  function stopRing() {
+    cancelAnimationFrame(ringRaf);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+  }
+
+  startIdle();
+  return { startRing, stopRing, startIdle };
+}
+
 async function doCreate() {
   if (!pending) return;
   const btn = $("#create-btn") as HTMLButtonElement;
+  if (btn.disabled) return;
   btn.disabled = true;
-  btn.textContent = "Encrypting...";
   show($("#create-error"), false);
+  btnCtl?.startRing();
+  // Always let the poof sweep at least once, even if the request is instant.
+  const minPoof = new Promise<void>((r) => setTimeout(r, 560));
   try {
     const master = generateMasterKey();
     const id = generateClipId();
@@ -261,14 +425,16 @@ async function doCreate() {
 
     const link = buildLink({ origin: location.origin, id: serverId, key: master });
     ($("#link") as HTMLInputElement).value = link;
+    await minPoof;
+    btnCtl?.stopRing();
     show($("#composer"), false);
     show($("#result"), true);
   } catch (err) {
+    btnCtl?.stopRing();
+    btnCtl?.startIdle();
     $("#create-error").textContent = String(err);
     show($("#create-error"), true);
-  } finally {
     btn.disabled = false;
-    btn.textContent = "Create poof";
   }
 }
 
