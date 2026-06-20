@@ -180,6 +180,16 @@ function initCreate() {
 
   $("#create-btn").addEventListener("click", () => void doCreate());
   $("#copy-link").addEventListener("click", () => copyText(($("#link") as HTMLInputElement).value, $("#copy-link")));
+  // Click the link field itself to copy it (#16). The copy-link button still
+  // works; the field click is an additional, more discoverable affordance.
+  // The transient affordance is borrowed from the existing button: we briefly
+  // swap the button's label so the success cue is shown in a stable spot.
+  $("#link").addEventListener("click", () => {
+    const linkField = $("#link") as HTMLInputElement;
+    if (!linkField.value || linkField.value === "(burned)") return;
+    linkField.select();
+    copyText(linkField.value, $("#copy-link"));
+  });
   $("#new-clip").addEventListener("click", () => {
     location.href = "/";
   });
