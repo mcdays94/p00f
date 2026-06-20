@@ -8,7 +8,7 @@
 // into the sandbox, so the key cannot reach the sandbox by construction.
 import type { ClipMeta } from "../shared/core";
 
-export type RenderMode = "text" | "code" | "image" | "secret" | "download";
+export type RenderMode = "text" | "code" | "image" | "secret" | "link" | "download";
 
 export interface RenderDecision {
   mode: RenderMode;
@@ -46,6 +46,12 @@ function isSvg(meta: ClipMeta): boolean {
 // - code: rendered in the sandbox with the inlined highlighter (POOF-11).
 //   Highlighting tokenizes the source and writes each token via textContent,
 //   so a code payload that contains raw HTML stays inert.
+// - url (masked URL, ADR-0013): rendered in the key-holding parent as a
+//   clickable anchor, BUT only after safeHttpUrl validates the destination.
+//   The sandbox cannot open a new tab, which is why this Kind is the one
+//   narrow exception to ADR-0012's sandbox-everything rule. The scheme
+//   allowlist (safeHttpUrl) is the load-bearing control that stops a
+//   `javascript:` or `data:` payload from running in the parent origin.
 // - unknown kind: escaped text if it is valid UTF-8, otherwise a download.
 export function decideRender(meta: ClipMeta, bytes: Uint8Array): RenderDecision {
   const kind = meta.kind;
@@ -55,12 +61,31 @@ export function decideRender(meta: ClipMeta, bytes: Uint8Array): RenderDecision 
     return { mode: "image", mime: meta.mime ?? "application/octet-stream" };
   }
   if (kind === "file") return { mode: "download", mime: meta.mime, filename: meta.filename };
+  if (kind === "url") return { mode: "link" };
   if (kind === "code") return { mode: "code" };
   if (kind === "text") return { mode: "text" };
   // Unknown kind: safe-as-text when UTF-8, otherwise a download.
   return looksUtf8(bytes)
     ? { mode: "text" }
     : { mode: "download", mime: meta.mime, filename: meta.filename };
+}
+
+// Scheme allowlist for the url Kind (ADR-0013). Returns the canonical href
+// (URL.href, lowercased scheme, default-port normalization) ONLY when the
+// destination parses as a URL and uses http: or https:; otherwise null.
+// Any other scheme (javascript:, data:, vbscript:, file:, blob:, ftp:, ws:,
+// mailto:, tel:, about:, custom:, ...) yields null, and the renderer falls
+// back to escaped-text-in-the-sandbox. The reveal path must never assign an
+// href before this returns a non-null value: a `javascript:` href would run
+// in the key-holding parent origin and exfiltrate the Fragment Key.
+export function safeHttpUrl(s: string): string | null {
+  try {
+    const u = new URL(s);
+    if (u.protocol === "http:" || u.protocol === "https:") return u.href;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function escapeHtml(s: string): string {

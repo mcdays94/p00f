@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage } from "../src/client/render";
+import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage, safeHttpUrl } from "../src/client/render";
 import { SANDBOX_HTML, SANDBOX_CSP } from "../src/shared/sandbox-doc";
 import { tokenize, detectLanguage, LANGS } from "../src/shared/highlight";
 
@@ -174,5 +174,59 @@ describe("POOF-11: sandbox-side code highlighter (ADR-0012)", () => {
   it("plain-lang tokenize emits the source as a single plain token", () => {
     const src = "anything";
     expect(tokenize(src, "plain")).toEqual([["", "anything"]]);
+  });
+});
+
+describe("POOF-13: masked URL Kind (ADR-0013)", () => {
+  it("decideRender returns 'link' mode for kind 'url'", () => {
+    const d = decideRender({ kind: "url", size: 21 }, te.encode("https://example.com/x"));
+    expect(d.mode).toBe("link");
+  });
+
+  it("safeHttpUrl returns the canonical href for http and https URLs", () => {
+    expect(safeHttpUrl("http://example.com/")).toBe("http://example.com/");
+    expect(safeHttpUrl("https://example.com/path?q=1")).toBe("https://example.com/path?q=1");
+    // bare host:port (a typical local-network destination) is accepted and
+    // normalized to a trailing slash by URL.href.
+    expect(safeHttpUrl("http://192.168.1.42:8080")).toBe("http://192.168.1.42:8080/");
+    // uppercased scheme is normalized to lowercase by the URL parser.
+    expect(safeHttpUrl("HTTPS://example.com/")).toBe("https://example.com/");
+  });
+
+  it("safeHttpUrl returns null for empty or non-URL input", () => {
+    expect(safeHttpUrl("")).toBeNull();
+    expect(safeHttpUrl("not a url")).toBeNull();
+    // A relative URL with no base throws inside new URL() and is rejected.
+    expect(safeHttpUrl("/relative/path")).toBeNull();
+    expect(safeHttpUrl("//evil.example")).toBeNull();
+  });
+
+  // The load-bearing security property of ADR-0013: a non-http(s) scheme MUST
+  // never produce a non-null result from safeHttpUrl, because the reveal path
+  // uses that return value as the anchor's href. A `javascript:` or `data:`
+  // href would execute in the key-holding parent origin and could exfiltrate
+  // the Fragment Key (ADR-0012).
+  it("safeHttpUrl rejects every non-http(s) scheme so it can never become clickable", () => {
+    const hostile = [
+      "javascript:alert(1)",
+      "javascript:void(0)",
+      "JAVASCRIPT:alert(1)",
+      "javaScript:alert(1)",
+      "data:text/html,<script>alert(1)</script>",
+      "data:text/plain;base64,YWJj",
+      "vbscript:msgbox(1)",
+      "file:///etc/passwd",
+      "blob:https://example.com/abc",
+      "about:blank",
+      "chrome://settings",
+      "ftp://example.com/",
+      "ws://example.com/",
+      "wss://example.com/",
+      "mailto:alice@example.com",
+      "tel:+1234567890",
+    ];
+    for (const s of hostile) {
+      expect(safeHttpUrl(s), `expected null for ${s}`).toBeNull();
+    }
   });
 });

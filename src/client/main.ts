@@ -9,7 +9,7 @@ import {
 } from "../shared/crypto";
 import { buildLink } from "../shared/link";
 import type { ClipMeta } from "../shared/core";
-import { decideRender, buildSandboxMessage, type SandboxMessage } from "./render";
+import { decideRender, buildSandboxMessage, safeHttpUrl, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -31,6 +31,17 @@ function formatSize(n: number): string {
 
 function looksLikeCode(s: string): boolean {
   return /\n/.test(s) && /[;{}<>]|=>|\bfunction\b|\bconst\b|\bdef\b|\bclass\b|\bimport\b|#include/.test(s);
+}
+
+// True when the textarea holds exactly one http(s) URL (a single token, no
+// embedded whitespace). Returns the canonical href so the create flow stores
+// a normalized destination; null means the input is not a lone URL and the
+// "share as masked link" suggestion stays hidden. A bare `host:port` stays
+// text by design (no scheme auto-prepend), per the ADR-0013 brief.
+function loneHttpUrl(s: string): string | null {
+  const t = s.trim();
+  if (!t || /\s/.test(t)) return null;
+  return safeHttpUrl(t);
 }
 
 async function copyText(text: string, btn: HTMLElement) {
@@ -64,6 +75,7 @@ function clearPending() {
 }
 
 const secretOn = () => ($("#secret") as HTMLInputElement | null)?.checked ?? false;
+const urlModeOn = () => ($("#url-mode") as HTMLInputElement | null)?.checked ?? false;
 
 async function loadFile(f: File) {
   const buf = new Uint8Array(await f.arrayBuffer());
@@ -84,9 +96,30 @@ function initCreate() {
   show($("#create-page"), true);
   const ta = $("#text") as HTMLTextAreaElement;
 
+  const urlSuggest = $("#url-suggest");
+  const urlToggle = $("#url-mode") as HTMLInputElement;
+
   const recomputeText = () => {
     const v = ta.value;
-    if (!v) return clearPending();
+    if (!v) {
+      show(urlSuggest, false);
+      urlToggle.checked = false;
+      return clearPending();
+    }
+    // Detect a lone http(s) URL (single token, http/https scheme). When the
+    // suggestion fires the user can opt in via the masked-link toggle, which
+    // sets kind="url" and stores the canonical href as the encrypted content.
+    // If the input is no longer a lone URL, the suggestion hides and the
+    // toggle is reset, so stale URL-mode never sticks to non-URL content.
+    const urlHref = loneHttpUrl(v);
+    show(urlSuggest, !!urlHref);
+    if (!urlHref) urlToggle.checked = false;
+
+    if (urlHref && urlToggle.checked) {
+      const bytes = te.encode(urlHref);
+      setPending(bytes, { kind: "url", mime: "text/plain", size: bytes.length });
+      return;
+    }
     const bytes = te.encode(v);
     const kind = secretOn() ? "secret" : looksLikeCode(v) ? "code" : "text";
     setPending(bytes, { kind, mime: "text/plain", size: bytes.length });
@@ -94,6 +127,10 @@ function initCreate() {
   ta.addEventListener("input", recomputeText);
   // Toggling secret re-kinds pending text (a file keeps its image/file kind).
   $("#secret")?.addEventListener("change", () => {
+    if (ta.value) recomputeText();
+  });
+  // Toggling the masked-link suggestion re-kinds pending text the same way.
+  $("#url-mode")?.addEventListener("change", () => {
     if (ta.value) recomputeText();
   });
 
@@ -414,6 +451,39 @@ function renderContent(bytes: Uint8Array, meta: ClipMeta) {
       }),
     );
     actions.appendChild(actionButton("download", () => download(bytes, meta.filename ?? "image", meta.mime ?? "image/png")));
+  } else if (decision.mode === "link") {
+    // Masked URL (ADR-0013). Rendered in the key-holding parent (the sandbox
+    // cannot open a new tab), so the safeHttpUrl scheme allowlist is the
+    // load-bearing control: only http(s) destinations ever become clickable.
+    // A `javascript:` / `data:` payload would run in the parent origin and
+    // exfiltrate the Fragment Key, so any non-http(s) content falls back to
+    // the regular escaped-text-in-the-sandbox path (no clickable href).
+    const text = td.decode(bytes);
+    const validated = safeHttpUrl(text);
+    if (validated) {
+      const a = document.createElement("a");
+      // textContent (never innerHTML) so even http(s) destinations cannot
+      // smuggle markup into the parent document.
+      a.textContent = validated;
+      a.href = validated;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.className = "clip-link";
+      host.appendChild(a);
+      actions.appendChild(
+        actionButton("open link", () => {
+          window.open(validated, "_blank", "noopener,noreferrer");
+        }),
+      );
+      const copyBtn = actionButton("copy", () => copyText(validated, copyBtn));
+      actions.appendChild(copyBtn);
+    } else {
+      // Hostile or malformed scheme: fall back to the escaped-text sandbox
+      // path so the bytes are shown but never clickable.
+      mountSandbox(host, buildSandboxMessage({ mode: "text" }, bytes));
+      const copyBtn = actionButton("copy", () => copyText(text, copyBtn));
+      actions.appendChild(copyBtn);
+    }
   } else {
     // text / code / unknown-but-UTF8
     const text = td.decode(bytes);
