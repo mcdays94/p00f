@@ -35,8 +35,12 @@ The number of times a Clip may be revealed before it burns. Default 1. Counts Re
 _Avoid_: views, reads, "number of users".
 
 **Kind**:
-The category of a Clip's content (text, code, image, file) that drives how it renders. Inferred client-side at create time and stored in the Clip's encrypted metadata, so the server never learns it.
-_Avoid_: type, format, mime (reserve "Kind" for this four-way category).
+The category of a Clip's content that drives how it renders. Inferred client-side at create time and stored in the Clip's encrypted metadata, so the server never learns it. An open set of understood values rather than a fixed list: text, code, image, file, secret, and url. The web app renders each understood Kind and falls back to text-or-download for anything else.
+_Avoid_: type, format, mime (reserve "Kind" for this content category).
+
+**Masked URL**:
+A Clip of Kind `url` whose decrypted content is a destination URL (http or https only). The poof Link stands in for that URL: on Reveal the recipient sees the destination and can open it. The server never sees the destination (it is encrypted content like any other Clip), so this masks a real URL behind a Link without shortening it and without weakening Zero-Knowledge. The masked target is the "destination URL"; it is distinct from the Link (the poof share URL).
+_Avoid_: short link, shortener, redirect (the server never resolves the destination).
 
 **PIN**:
 An optional 4-digit numeric second factor for a Clip, shared out-of-band by the sharer. Gates server-side release of the content blob and is folded into the content key. Distinct from the Fragment Key.
@@ -67,3 +71,5 @@ _Avoid_: admin key, management password, delete key.
 - "paste" / "clipboard" were used loosely for the shared unit. Resolved: the canonical term is **Clip**.
 - "secure" was used to mean confidentiality. Resolved: we mean **Zero-Knowledge** (server holds only ciphertext). Access control (expiry/PIN/approval) is tracked separately and is not "security" in the confidentiality sense.
 - "read by X users" was used for the burn limit. Resolved: with no identity to dedupe on, we count **Reveals** (ciphertext releases), not users. The canonical term is **Reveal budget** and the UI says "reveals," never "users."
+- A "URL shortener" was requested but rejected: a server-resolvable short link would break Zero-Knowledge (ADR-0001, ADR-0010), and a poof Link cannot be short because it carries the Fragment Key. Resolved: the **Masked URL** Kind (`url`) masks a destination behind a Link without shortening it or resolving it server-side (ADR-0013).
+- "Kind" was originally a fixed four-way set (text, code, image, file). It has since grown (secret in v2, url for masked links) and is now an open set of understood values; the term no longer implies exactly four.
