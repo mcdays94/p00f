@@ -5,6 +5,7 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2025-05-01",
   "observability": { "enabled": true },
+  "routes": [{ "pattern": "p00f.me", "custom_domain": true }],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
