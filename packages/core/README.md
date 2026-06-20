@@ -1,6 +1,6 @@
 # p00f-core
 
-The zero-knowledge engine behind [p00f](https://github.com/mcdays94/poof): one
+The zero-knowledge engine behind [p00f](https://github.com/mcdays94/p00f): one
 small module that encrypts and decrypts entirely caller-side, builds and parses
 share Links, and talks to the p00f API as a ciphertext-only client. It is Web
 Crypto only, so the same code runs in browsers, Node 20+, and Cloudflare Workers
