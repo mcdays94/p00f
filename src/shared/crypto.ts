@@ -45,6 +45,12 @@ export const decodeKey = base64urlDecode;
 
 export type BlobRole = "metadata" | "content";
 
+// HKDF info strings, one per role (ADR-0009). Exported so the published wire
+// format (src/shared/wire.ts) is sourced from the same constants the derivation
+// uses, and cannot drift from it.
+export const METADATA_INFO = "poof/metadata/v1";
+export const CONTENT_INFO = "poof/content/v1";
+
 // HKDF-SHA-256 key hierarchy (ADR-0009). The PIN is folded into the input key
 // material for the content role only, so the metadata key is independent of it.
 async function deriveAesKey(
@@ -61,7 +67,7 @@ async function deriveAesKey(
     ikm.set(pinBytes, master.length);
   }
   const baseKey = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveKey"]);
-  const info = enc.encode(role === "metadata" ? "poof/metadata/v1" : "poof/content/v1");
+  const info = enc.encode(role === "metadata" ? METADATA_INFO : CONTENT_INFO);
   const salt = enc.encode(clipId);
   return crypto.subtle.deriveKey(
     { name: "HKDF", hash: "SHA-256", salt, info },

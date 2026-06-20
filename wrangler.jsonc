@@ -8,7 +8,10 @@
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    // The worker is the front door: it must see "/", "/c/:id", "/llms.txt", and
+    // "/health" to content-negotiate and publish the discovery doc (POOF-13). It
+    // delegates to ASSETS for the SPA shell and static files via env.ASSETS.fetch.
+    "run_worker_first": true
   },
   "durable_objects": {
     "bindings": [{ "name": "CLIP", "class_name": "ClipDO" }]

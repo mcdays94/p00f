@@ -1,6 +1,7 @@
 import { ClipDO } from "./clip-do";
 import type { Env } from "./types";
 import { generateClipId, base64urlEncode, generateOwnerToken } from "../shared/crypto";
+import { buildEnvelope, discoveryDoc, llmsTxt } from "../shared/wire";
 import { verifyTurnstile } from "./turnstile";
 import { sha256B64, randomSaltB64 } from "./hash";
 
@@ -18,6 +19,32 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+// Credential-less CORS for the JSON API (PRD 0002 request hygiene). Note the
+// deliberate absence of Access-Control-Allow-Credentials: a Link is a bearer
+// capability in its fragment, never a cookie, so the API never reflects an
+// origin or grants credentialed cross-site access.
+const CORS: Record<string, string> = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+};
+
+// Request hygiene applied to every worker-generated response (PRD 0002): a
+// no-referrer policy and credential-less CORS always; no-store plus a cache
+// bypass on clip data so ciphertext is never cached and cannot outlive a burn;
+// Vary: Accept on content-negotiated routes.
+function harden(res: Response, opts: { noStore?: boolean; vary?: boolean } = {}): Response {
+  const h = new Headers(res.headers);
+  h.set("referrer-policy", "no-referrer");
+  for (const [k, v] of Object.entries(CORS)) h.set(k, v);
+  if (opts.noStore) {
+    h.set("cache-control", "no-store, private");
+    h.set("cdn-cache-control", "no-store");
+  }
+  if (opts.vary) h.set("vary", "Accept");
+  return new Response(res.status === 204 ? null : res.body, { status: res.status, headers: h });
 }
 
 function clampTtl(v: number): number {
@@ -127,6 +154,24 @@ async function handleMeta(id: string, env: Env): Promise<Response> {
   });
 }
 
+// Content-negotiated metadata envelope (POOF-13). Non-consuming: it returns the
+// cleartext protocol fields plus the encrypted metadata blob, never plaintext
+// or the Fragment Key (ADR-0003, ADR-0010).
+async function handleEnvelope(id: string, env: Env): Promise<Response> {
+  const m = await env.CLIP.getByName(id).getMeta();
+  if (!m.exists) return json({ exists: false }, 404);
+  return json(
+    buildEnvelope({
+      id,
+      revealsRemaining: m.revealsRemaining,
+      expiresAt: m.expiresAt,
+      pinRequired: m.pinRequired,
+      size: m.size,
+      metadata: m.metadata,
+    }),
+  );
+}
+
 async function handleReveal(id: string, env: Env, request: Request): Promise<Response> {
   let body: { pin?: unknown; turnstile?: unknown } = {};
   try {
@@ -157,22 +202,55 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const p = url.pathname;
+    const method = request.method;
+    const wantsJson = (request.headers.get("Accept") ?? "").includes("application/json");
 
-    if (p === "/api/health") return json({ ok: true });
-    if (p === "/api/clip" && request.method === "POST") return handleCreate(request, env);
+    // Credential-less CORS preflight for the JSON API.
+    if (method === "OPTIONS") return harden(new Response(null, { status: 204 }));
+
+    if (p === "/api/health" || p === "/health") return harden(json({ ok: true }));
+
+    // Machine discovery: the wire-format contract as plain text, plus a JSON
+    // discovery document when the bare root is fetched with Accept: json. The
+    // HTML root still falls through to the SPA shell below.
+    if (p === "/llms.txt") {
+      return harden(
+        new Response(llmsTxt(url.origin), {
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }),
+      );
+    }
+    if (p === "/" && wantsJson) return harden(json(discoveryDoc(url.origin)), { vary: true });
+
+    if (p === "/api/clip" && method === "POST") {
+      return harden(await handleCreate(request, env), { noStore: true });
+    }
+
+    // Encrypted envelope: /c/:id.json, or /c/:id with Accept: application/json.
+    // Both are non-consuming; the bare /c/:id with an HTML Accept falls through
+    // to the SPA shell.
+    const cjson = p.match(/^\/c\/([^/]+)\.json$/);
+    if (cjson && method === "GET") {
+      return harden(await handleEnvelope(cjson[1], env), { noStore: true, vary: true });
+    }
+    const cbare = p.match(/^\/c\/([^/]+)$/);
+    if (cbare && method === "GET" && wantsJson) {
+      return harden(await handleEnvelope(cbare[1], env), { noStore: true, vary: true });
+    }
 
     const meta = p.match(/^\/api\/clip\/([^/]+)\/meta$/);
-    if (meta && request.method === "GET") return handleMeta(meta[1], env);
+    if (meta && method === "GET") return harden(await handleMeta(meta[1], env), { noStore: true });
 
     const rev = p.match(/^\/api\/clip\/([^/]+)\/reveal$/);
-    if (rev && request.method === "POST") return handleReveal(rev[1], env, request);
+    if (rev && method === "POST") return harden(await handleReveal(rev[1], env, request), { noStore: true });
 
     const del = p.match(/^\/api\/clip\/([^/]+)\/delete$/);
-    if (del && request.method === "POST") return handleDelete(del[1], env, request);
+    if (del && method === "POST") return harden(await handleDelete(del[1], env, request), { noStore: true });
 
-    if (p.startsWith("/api/")) return new Response("Not found", { status: 404 });
+    if (p.startsWith("/api/")) return harden(new Response("Not found", { status: 404 }));
 
-    // Non-API routes are served by static assets (see wrangler run_worker_first).
+    // Non-API routes are served by static assets (see wrangler run_worker_first):
+    // the SPA shell, including the bare /c/:id reveal page and the HTML root.
     return env.ASSETS.fetch(request);
   },
 };
