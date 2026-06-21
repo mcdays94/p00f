@@ -27,7 +27,7 @@ export async function poofCreate(http: HttpLike, baseUrl: string, args: CreateAr
 }
 
 export type ReadResultJson =
-  | { ok: false; reason: string }
+  | { ok: false; reason: string; note?: string }
   | { ok: true; kind?: string; text?: string; binary?: true; note?: string };
 
 export async function poofRead(
@@ -47,7 +47,15 @@ export async function poofRead(
     return { ok: false, reason: "confirm_required" };
   }
   const r = await read(http, link, { pin: args?.pin });
-  if (!r.ok) return { ok: false, reason: r.reason ?? "error" };
+  if (!r.ok) {
+    if (r.reason === "turnstile")
+      return {
+        ok: false,
+        reason: "turnstile",
+        note: "this poof requires a human captcha (Turnstile) to reveal; it cannot be revealed headlessly. Open the link in a browser.",
+      };
+    return { ok: false, reason: r.reason ?? "error" };
+  }
   const content = r.content as Uint8Array;
   if (content.some((b) => b === 0)) {
     return { ok: true, kind: r.meta?.kind, binary: true, note: "binary content; use the CLI or web app to download" };

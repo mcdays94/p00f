@@ -18,7 +18,7 @@ const COMMANDS: Record<string, Command> = {
 };
 
 // Flags that never take a value (presence means true).
-const BOOLEAN_FLAGS = new Set(["json", "copy", "no-countdown"]);
+const BOOLEAN_FLAGS = new Set(["json", "copy", "no-countdown", "require-turnstile"]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const flags: Record<string, string | boolean> = {};

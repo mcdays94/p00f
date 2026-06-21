@@ -83,6 +83,9 @@ async function cmdCreate(a) {
   // --no-countdown folds ClipMeta.showCountdown=false into the encrypted
   // metadata (ADR-0014); default leaves the recipient countdown on.
   const showCountdown = a.flags["no-countdown"] ? false : undefined;
+  // --require-turnstile gates reveal behind a human captcha (ADR-0015). Default
+  // off so the poof another agent receives stays revealable from the CLI/API.
+  const requireTurnstile = a.flags["require-turnstile"] ? true : undefined;
 
   const created = await create(http, BASE, {
     content,
@@ -91,6 +94,7 @@ async function cmdCreate(a) {
     revealBudget,
     pin,
     showCountdown,
+    requireTurnstile,
   });
 
   if (a.flags.json) {
@@ -106,6 +110,8 @@ async function cmdGet(a) {
   if (!link) die("usage: poof get <link> [--out FILE] [--pin 1234]", 2);
   const r = await read(http, link, { pin: typeof a.flags.pin === "string" ? a.flags.pin : undefined });
   if (!r.ok) {
+    if (r.reason === "turnstile")
+      die("this poof requires a human captcha to reveal; open the link in a browser", 7);
     const code = r.reason === "gone" ? 3 : r.reason === "decrypt" ? 6 : 5;
     die(`could not read clip: ${r.reason}`, code);
   }
@@ -130,7 +136,9 @@ async function cmdInfo(a) {
     return;
   }
   const reveals = i.revealsRemaining === null ? "unlimited" : String(i.revealsRemaining);
-  process.stderr.write(`kind: ${i.meta?.kind ?? "?"}\nreveals left: ${reveals}\npin required: ${i.pinRequired}\n`);
+  process.stderr.write(
+    `kind: ${i.meta?.kind ?? "?"}\nreveals left: ${reveals}\npin required: ${i.pinRequired}\ncaptcha required: ${i.turnstileRequired}\n`,
+  );
 }
 
 async function cmdBurn(a) {

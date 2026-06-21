@@ -133,6 +133,51 @@ describe("@p00f/core", () => {
     expect((await info(http, offClip.link)).meta?.showCountdown).toBe(false);
   });
 
+  it("default poof is agent-revealable; requireTurnstile gates it on a human token (ADR-0015)", async () => {
+    const { http } = capturing();
+    // Default: no captcha required, so a headless caller (no token) can reveal.
+    const open = await create(http, base, {
+      content: te.encode("agent ok"),
+      meta: { kind: "text", size: 8 },
+      revealBudget: 2,
+    });
+    expect((await info(http, open.link)).turnstileRequired).toBe(false);
+    const r1 = await read(http, open.link); // no token
+    expect(r1.ok).toBe(true);
+    expect(td.decode(r1.content as Uint8Array)).toBe("agent ok");
+
+    // Opt-in: a captcha is required, so a tokenless reveal is refused.
+    const gated = await create(http, base, {
+      content: te.encode("human only"),
+      meta: { kind: "text", size: 10 },
+      revealBudget: 2,
+      requireTurnstile: true,
+    });
+    expect((await info(http, gated.link)).turnstileRequired).toBe(true);
+    const noTok = await read(http, gated.link); // no token
+    expect(noTok.ok).toBe(false);
+    expect(noTok.reason).toBe("turnstile");
+    // The test secret accepts any token, standing in for a solved challenge.
+    const withTok = await read(http, gated.link, { turnstile: "tok" });
+    expect(withTok.ok).toBe(true);
+    expect(td.decode(withTok.content as Uint8Array)).toBe("human only");
+  });
+
+  it("an agent reveals a PIN poof with just the PIN when no captcha is required (fixes #18, ADR-0011/0015)", async () => {
+    const { http } = capturing();
+    const created = await create(http, base, {
+      content: te.encode("token-value"),
+      meta: { kind: "secret", size: 11 },
+      revealBudget: 2,
+      pin: "9119",
+    });
+    // No Turnstile token is sent (the machine path has none); the PIN alone
+    // unlocks it because the creator did not require a captcha.
+    const r = await read(http, created.link, { pin: "9119" });
+    expect(r.ok).toBe(true);
+    expect(td.decode(r.content as Uint8Array)).toBe("token-value");
+  });
+
   it("burns with the owner token so a later read is gone", async () => {
     const { http } = capturing();
     const created = await create(http, base, {

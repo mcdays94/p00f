@@ -22,6 +22,10 @@ export interface Envelope {
   id: string;
   revealsRemaining: number | null; // null = unlimited until expiry
   pinRequired: boolean;
+  // True when the creator required a human Turnstile token to reveal (ADR-0015).
+  // When false (the default) any link-holder, including a headless agent, can
+  // reveal. Lets an agent decide up front whether it can complete the reveal.
+  turnstileRequired: boolean;
   hasContent: boolean;
   sizeBucket: string;
   metadata: string; // base64url AES-GCM ciphertext (12-byte IV prepended)
@@ -31,6 +35,7 @@ export function buildEnvelope(input: {
   id: string;
   revealsRemaining: number | null;
   pinRequired: boolean;
+  turnstileRequired?: boolean;
   size: number;
   metadata: Uint8Array;
 }): Envelope {
@@ -38,6 +43,7 @@ export function buildEnvelope(input: {
     id: input.id,
     revealsRemaining: input.revealsRemaining,
     pinRequired: input.pinRequired,
+    turnstileRequired: input.turnstileRequired ?? false,
     hasContent: true,
     sizeBucket: sizeBucket(input.size),
     metadata: base64urlEncode(input.metadata),
@@ -62,9 +68,9 @@ export const WIRE_FORMAT = {
     nonce: "12 random bytes (IV), prepended to the ciphertext: layout is iv(12) || ciphertext+tag.",
   },
   envelope: {
-    cleartext: ["id", "revealsRemaining", "pinRequired", "hasContent", "sizeBucket"],
+    cleartext: ["id", "revealsRemaining", "pinRequired", "turnstileRequired", "hasContent", "sizeBucket"],
     encrypted: "metadata: base64url AES-GCM ciphertext of the JSON { kind, filename, mime, size, expiresAt, showCountdown }",
-    note: "The exact kind, filename, mime, size, and the expiry deadline (expiresAt) are inside the encrypted metadata blob, never in cleartext (ADR-0014).",
+    note: "The exact kind, filename, mime, size, and the expiry deadline (expiresAt) are inside the encrypted metadata blob, never in cleartext (ADR-0014). pinRequired and turnstileRequired tell a caller whether it needs the out-of-band PIN/password and/or a human (a turnstileRequired poof cannot be revealed by the machine path).",
   },
 } as const;
 
@@ -89,8 +95,8 @@ export function discoveryDoc(origin: string): DiscoveryDoc {
       "All encryption and decryption happen caller-side. The Fragment Key lives in the URL fragment and never reaches the server. The server cannot read content and cannot recover a lost link.",
     endpoints: {
       create: `POST ${o}/api/clip (multipart: meta, content ciphertext blobs, ttlMs, revealBudget, optional pin, optional id). No Turnstile token is required on the machine path; it is allowed under a rate-limit floor.`,
-      envelope: `GET ${o}/c/:id.json (or GET ${o}/c/:id with Accept: application/json). Non-consuming. Returns the encrypted metadata envelope.`,
-      reveal: `POST ${o}/api/clip/:id/reveal. Consuming. Returns the encrypted content as application/octet-stream; decrypt caller-side.`,
+      envelope: `GET ${o}/c/:id.json (or GET ${o}/c/:id with Accept: application/json). Non-consuming. Returns the encrypted metadata envelope, including pinRequired and turnstileRequired so a caller knows up front whether it can reveal.`,
+      reveal: `POST ${o}/api/clip/:id/reveal. Consuming. JSON body carries { pin } when pinRequired and { turnstile } when turnstileRequired (both optional otherwise). Returns the encrypted content as application/octet-stream; decrypt caller-side. A poof with turnstileRequired=false is revealable by a headless agent with no token (and with the PIN if pinRequired).`,
       meta: `GET ${o}/api/clip/:id/meta. Non-consuming legacy metadata endpoint.`,
       delete: `POST ${o}/api/clip/:id/delete (body: { ownerToken }). Owner-gated early burn.`,
       health: `GET ${o}/health`,
@@ -126,6 +132,9 @@ link (and any LLM behind them) can decrypt and will see plaintext.
 - POST ${o}/api/clip/:id/reveal
   Consuming. Returns encrypted content as application/octet-stream. Decrypt
   caller-side. Reveal is a POST so prefetchers and unfurlers never spend budget.
+  JSON body carries { pin } when the envelope says pinRequired, and { turnstile }
+  when it says turnstileRequired. A poof with turnstileRequired=false needs no
+  human and is revealable headlessly.
 - POST ${o}/api/clip/:id/delete  body { ownerToken }
   Owner-gated early burn. The owner token is returned once at create and is
   never carried in the link.
@@ -145,6 +154,26 @@ link (and any LLM behind them) can decrypt and will see plaintext.
 The .json envelope is a JSON object with cleartext protocol fields
 (${w.envelope.cleartext.join(", ")}) and one encrypted field
 (${w.envelope.encrypted}). ${w.envelope.note}
+
+## Revealing as an agent (no browser required)
+
+A poof link looks like ${o}/c/<id>#<key>. The part after '#' is the Fragment
+Key and is NEVER sent to the server. To reveal without a browser:
+
+1. Split the link on '#': the path gives <id>; the fragment is the base64url key.
+2. GET ${o}/c/<id>.json. If turnstileRequired is true, a human Turnstile
+   challenge is required and you cannot reveal headlessly; stop here. If
+   pinRequired is true, you need the PIN/password the sharer gave you.
+3. POST ${o}/api/clip/<id>/reveal with a JSON body of { pin } if pinRequired
+   (otherwise an empty POST). The response body is AES-GCM ciphertext laid out as
+   iv(12) || ciphertext+tag.
+4. Derive the content key with ${w.kdf.algorithm}: salt = ${w.kdf.salt}, info =
+   "${w.kdf.info.content}", IKM = the 32-byte key (with the PIN bytes appended
+   when a PIN is set). Decrypt the reveal bytes. The metadata blob from step 2
+   decrypts the same way with info = "${w.kdf.info.metadata}" and no PIN.
+
+@p00f/core implements all of this; an agent that can run JS can call it directly
+instead of reimplementing the crypto.
 
 ## Reference
 

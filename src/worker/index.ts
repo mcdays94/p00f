@@ -121,6 +121,9 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   // server-side shape check; the DO hashes whatever it stores with PBKDF2.
   const pinRaw = form.get("pin");
   const pin = typeof pinRaw === "string" && isValidPin(pinRaw) ? pinRaw : undefined;
+  // Opt-in reveal-Turnstile (ADR-0015): default off, so the poof stays
+  // machine-revealable unless the creator asks for a human gate.
+  const requireTurnstile = form.get("requireTurnstile") === "1";
 
   // The client generates the id so it can salt the key derivation with it
   // before uploading (ADR-0009). Fall back to a server id if absent (tests).
@@ -143,6 +146,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     revealBudget,
     size: content.size,
     pin,
+    requireTurnstile,
     ownerHash,
     ownerSalt,
     inlineMax: Number(env.INLINE_MAX_BYTES),
@@ -177,6 +181,7 @@ async function handleMeta(id: string, env: Env): Promise<Response> {
     metadata: base64urlEncode(m.metadata),
     revealsRemaining: m.revealsRemaining,
     pinRequired: m.pinRequired,
+    turnstileRequired: m.turnstileRequired,
     size: m.size,
   });
 }
@@ -192,6 +197,7 @@ async function handleEnvelope(id: string, env: Env): Promise<Response> {
       id,
       revealsRemaining: m.revealsRemaining,
       pinRequired: m.pinRequired,
+      turnstileRequired: m.turnstileRequired,
       size: m.size,
       metadata: m.metadata,
     }),
@@ -208,19 +214,20 @@ async function handleReveal(id: string, env: Env, request: Request): Promise<Res
   const pin = typeof body.pin === "string" ? body.pin : undefined;
   const turnstile = typeof body.turnstile === "string" ? body.turnstile : undefined;
 
-  // Turnstile gates each PIN submission (ADR-0005).
-  if (pin) {
-    const ok = turnstile
-      ? await verifyTurnstile(turnstile, env.TURNSTILE_SECRET, request.headers.get("CF-Connecting-IP"))
-      : false;
-    if (!ok) return json({ error: "turnstile_failed" }, 403);
-  }
+  // Reveal-Turnstile is now opt-in per clip (ADR-0015), decoupled from the PIN.
+  // Verify whatever token was sent and hand the boolean to the DO, which gates
+  // (non-consuming) only when the clip required it. A clip that does not require
+  // Turnstile is revealable with no token at all (the agent / machine path).
+  const turnstileVerified = turnstile
+    ? await verifyTurnstile(turnstile, env.TURNSTILE_SECRET, request.headers.get("CF-Connecting-IP"))
+    : false;
 
-  const r = await env.CLIP.getByName(id).reveal(pin);
+  const r = await env.CLIP.getByName(id).reveal(pin, turnstileVerified);
   if (r.ok) {
     return new Response(r.content, { headers: { "content-type": "application/octet-stream" } });
   }
-  const status = r.reason === "gone" ? 410 : r.reason === "locked" ? 423 : 401;
+  const status =
+    r.reason === "gone" ? 410 : r.reason === "locked" ? 423 : r.reason === "turnstile_required" ? 403 : 401;
   return json({ error: r.reason, attemptsLeft: r.attemptsLeft }, status);
 }
 

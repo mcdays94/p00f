@@ -66,14 +66,30 @@ async function copyToClipboard(text: string): Promise<void> {
   }
 }
 
+// Native share sheet for the generated link (great on mobile). Falls back to a
+// copy if the user cancels or the platform rejects the payload. Only the link
+// is shared; the Fragment Key is in the link, so anyone shared-with can decrypt.
+async function shareLink(): Promise<void> {
+  const url = ($("#link") as HTMLInputElement).value;
+  if (!url || url === "(burned)") return;
+  try {
+    await navigator.share({ title: "p00f", text: "A poof for you (zero-knowledge, expires soon):", url });
+  } catch {
+    /* user cancelled, or share unavailable: leave the copy button as the fallback */
+  }
+}
+
 // ---------------- create ----------------
 
 let pending: { bytes: Uint8Array; meta: ClipMeta } | null = null;
 let lastClipId = "";
 let lastOwnerToken = "";
 
-// Composite create button (V6) controller, set up in initCreate.
-let btnCtl: { startRing: () => void; stopRing: () => void; startIdle: () => void } | null = null;
+// Composite poof-button controllers (V6). The create button is set up in
+// initCreate; the reveal button (same animation) is set up in initReveal.
+type PoofBtnCtl = { startRing: () => void; stopRing: () => void; startIdle: () => void };
+let btnCtl: PoofBtnCtl | null = null;
+let revealCtl: PoofBtnCtl | null = null;
 
 function setPending(bytes: Uint8Array, meta: ClipMeta) {
   pending = { bytes, meta };
@@ -108,7 +124,7 @@ function turnstileToken(): string {
 
 function initCreate() {
   show($("#create-page"), true);
-  btnCtl = setupCreateButton();
+  btnCtl = setupPoofButton("#create-btn", "create poof", "$ poof");
   const ta = $("#text") as HTMLTextAreaElement;
 
   const urlSuggest = $("#url-suggest");
@@ -185,6 +201,13 @@ function initCreate() {
 
   $("#create-btn").addEventListener("click", () => void doCreate());
   $("#copy-link").addEventListener("click", () => copyText(($("#link") as HTMLInputElement).value, $("#copy-link")));
+  // Native share (Web Share API), great on mobile. Shown only where supported;
+  // elsewhere the copy button stays the primary affordance.
+  const shareBtn = $("#share-link") as HTMLButtonElement | null;
+  if (shareBtn && typeof navigator.share === "function") {
+    show(shareBtn, true);
+    shareBtn.addEventListener("click", () => void shareLink());
+  }
   // Click the link field itself to copy it (#16). The copy-link button still
   // works; the field click is an additional, more discoverable affordance.
   // The transient affordance is borrowed from the existing button: we briefly
@@ -234,12 +257,18 @@ async function doDeleteNow() {
   show(status, true);
 }
 
-// The create button is a small interactive scene on a canvas: a drifting glyph
-// field at rest, a mono label that loops "create poof" <-> the bash command
-// "$ poof" via an ascii scramble (no hover; works on touch), and on submit an
-// ascii smoke ring that sweeps the whole button while the poof is created.
-function setupCreateButton(): { startRing: () => void; stopRing: () => void; startIdle: () => void } | null {
-  const btn = document.querySelector("#create-btn") as HTMLButtonElement | null;
+// A poof button is a small interactive scene on a canvas: a drifting glyph field
+// at rest, a mono label that loops an idle label <-> a bash command via an ascii
+// scramble (no hover; works on touch), and on submit an ascii smoke ring that
+// sweeps the whole button while the request is in flight. Shared by the create
+// button ("create poof" / "$ poof") and the reveal button ("reveal poof" /
+// "$ poof get"), so both get the same poof animation.
+function setupPoofButton(
+  selector: string,
+  idleText: string,
+  cmdText: string,
+): { startRing: () => void; stopRing: () => void; startIdle: () => void } | null {
+  const btn = document.querySelector(selector) as HTMLButtonElement | null;
   const cv = btn?.querySelector(".poof-field") as HTMLCanvasElement | null;
   const label = btn?.querySelector(".poof-label") as HTMLElement | null;
   const ctx = cv?.getContext("2d");
@@ -287,8 +316,11 @@ function setupCreateButton(): { startRing: () => void; stopRing: () => void; sta
     fieldRaf = requestAnimationFrame(fieldFrame);
   }
 
-  const LABEL = "create poof";
-  const CMD = "$ poof";
+  const LABEL = idleText;
+  const CMD = cmdText;
+  // Render a leading "$" of the command in green; the rest stays plain. Lets the
+  // reveal command ("$ poof get") get the same prompt treatment as create.
+  const cmdHtml = CMD.startsWith("$") ? '<span class="pr">$</span>' + CMD.slice(1) : CMD;
   const SCR = "!<>-_\\/[]{}=+*?#@%".split("");
   let sraf = 0;
   let timer = 0;
@@ -327,13 +359,13 @@ function setupCreateButton(): { startRing: () => void; stopRing: () => void; sta
     };
     sraf = requestAnimationFrame(step);
   }
-  const toCmd = () => scramble(LABEL, CMD, 300, () => { settle('<span class="pr">$</span> poof'); timer = window.setTimeout(toLabel, 1300); });
-  const toLabel = () => scramble(CMD, LABEL, 300, () => { settle("create poof"); timer = window.setTimeout(toCmd, 3000); });
+  const toCmd = () => scramble(LABEL, CMD, 300, () => { settle(cmdHtml); timer = window.setTimeout(toLabel, 1300); });
+  const toLabel = () => scramble(CMD, LABEL, 300, () => { settle(LABEL); timer = window.setTimeout(toCmd, 3000); });
 
   function startIdle() {
     cancelAnimationFrame(ringRaf);
     label.style.visibility = "visible";
-    settle("create poof");
+    settle(LABEL);
     clearTimeout(timer);
     timer = window.setTimeout(toCmd, 3000);
     cancelAnimationFrame(fieldRaf);
@@ -407,6 +439,9 @@ async function doCreate() {
   const pin = pinRaw || undefined;
   // Creator's show/hide-countdown choice (ADR-0014), default on.
   const showCountdown = ($("#show-countdown") as HTMLInputElement | null)?.checked ?? true;
+  // Creator's opt-in to require a captcha on reveal (ADR-0015), default off. When
+  // off, the poof stays revealable by an agent / the machine path.
+  const requireTurnstile = ($("#require-turnstile") as HTMLInputElement | null)?.checked ?? false;
 
   btn.disabled = true;
   show($("#create-error"), false);
@@ -433,6 +468,7 @@ async function doCreate() {
     fd.set("ttlMs", String(ttlMs));
     fd.set("revealBudget", ($("#budget") as HTMLSelectElement).value);
     if (pin) fd.set("pin", pin);
+    if (requireTurnstile) fd.set("requireTurnstile", "1");
     fd.set("meta", new Blob([metaCipher]));
     fd.set("content", new Blob([contentCipher]));
 
@@ -545,8 +581,10 @@ async function initReveal(id: string, keyStr: string) {
     metadata: string;
     revealsRemaining: number | null;
     pinRequired: boolean;
+    turnstileRequired?: boolean;
   };
   if (!data.exists) return showGone();
+  const turnstileRequired = data.turnstileRequired === true;
 
   let meta: ClipMeta;
   try {
@@ -554,6 +592,7 @@ async function initReveal(id: string, keyStr: string) {
     meta = JSON.parse(td.decode(bytes)) as ClipMeta;
   } catch {
     $("#pc-detail").textContent = "could not decrypt (bad link)";
+    show($("#reveal-btn"), false);
     show($("#precard"), true);
     return;
   }
@@ -563,6 +602,9 @@ async function initReveal(id: string, keyStr: string) {
   $("#pc-reveals").textContent =
     data.revealsRemaining === null ? "unlimited reveals" : `${data.revealsRemaining} reveal(s) left`;
   if (data.pinRequired) show($("#pin-entry"), true);
+  // Turnstile on reveal is now an independent, opt-in gate (ADR-0015), no longer
+  // implied by a PIN. Show the widget only when this poof actually requires it.
+  if (turnstileRequired) show($("#reveal-ts-wrap"), true);
   show($("#precard"), true);
 
   // Countdown + best-effort auto-clear once we know the (encrypted) deadline.
@@ -570,62 +612,87 @@ async function initReveal(id: string, keyStr: string) {
     startCountdown(id, meta.expiresAt, meta.showCountdown !== false);
   }
 
-  $("#reveal-btn").addEventListener("click", () => void doReveal(id, master, meta, data.pinRequired));
+  // Set up the reveal poof-button now that the precard is laid out, so its canvas
+  // measures the real button box. Same animation as create ("$ poof get").
+  revealCtl = setupPoofButton("#reveal-btn", "reveal poof", "$ poof get");
+  $("#reveal-btn").addEventListener("click", () =>
+    void doReveal(id, master, meta, data.pinRequired, turnstileRequired),
+  );
 }
 
-async function doReveal(id: string, master: Uint8Array, meta: ClipMeta, pinRequired: boolean) {
+async function doReveal(
+  id: string,
+  master: Uint8Array,
+  meta: ClipMeta,
+  pinRequired: boolean,
+  turnstileRequired: boolean,
+) {
   const btn = $("#reveal-btn") as HTMLButtonElement;
-  btn.disabled = true;
+  if (btn.disabled) return;
   show($("#precard-info"), false);
+
+  // Validate inputs BEFORE the poof animation so an input error never flashes
+  // the ring. PIN and Turnstile are independent now (ADR-0015).
+  let pin: string | undefined;
+  if (pinRequired) {
+    pin = ($("#reveal-pin") as HTMLInputElement).value.trim();
+    if (!isValidPin(pin)) {
+      $("#precard-info").textContent = "enter the PIN or password for this poof";
+      show($("#precard-info"), true);
+      return;
+    }
+  }
+  const turnstile = turnstileRequired ? turnstileToken() : undefined;
+
+  btn.disabled = true;
+  revealCtl?.startRing();
+  // Let the poof sweep at least once before the content materializes.
+  const minPoof = new Promise<void>((r) => setTimeout(r, 560));
+
+  // Recoverable failure: stop the ring, restore the idle button, surface a note.
+  const recover = (msg: string) => {
+    revealCtl?.stopRing();
+    revealCtl?.startIdle();
+    btn.disabled = false;
+    $("#precard-info").textContent = msg;
+    show($("#precard-info"), true);
+  };
+
   try {
-    let pin: string | undefined;
     let bytes = sessionCache.get(id);
     if (!bytes) {
-      let init: RequestInit = { method: "POST" };
-      if (pinRequired) {
-        pin = ($("#reveal-pin") as HTMLInputElement).value.trim();
-        if (!isValidPin(pin)) {
-          $("#precard-info").textContent = "enter the PIN or password for this poof";
-          show($("#precard-info"), true);
-          return;
-        }
-        init = {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ pin, turnstile: turnstileToken() }),
-        };
-      }
+      const hasBody = pinRequired || turnstileRequired;
+      const init: RequestInit = hasBody
+        ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pin, turnstile }) }
+        : { method: "POST" };
       const res = await fetch(`/api/clip/${id}/reveal`, init);
-      if (res.status === 410) return showGone();
-      if (res.status === 423) {
-        $("#precard-info").textContent = "too many wrong PINs. This poof is locked until it expires.";
-        show($("#precard-info"), true);
-        return;
+      if (res.status === 410) {
+        revealCtl?.stopRing();
+        return showGone();
       }
+      if (res.status === 423) return recover("too many wrong PINs. This poof is locked until it expires.");
+      if (res.status === 403) return recover("this poof needs a captcha. Complete it and try again.");
       if (res.status === 401) {
         const body = (await res.json().catch(() => ({}))) as { attemptsLeft?: number };
-        $("#precard-info").textContent =
-          body.attemptsLeft != null ? `wrong PIN. ${body.attemptsLeft} attempt(s) left.` : "PIN required.";
-        show($("#precard-info"), true);
-        return;
+        return recover(
+          body.attemptsLeft != null ? `wrong PIN. ${body.attemptsLeft} attempt(s) left.` : "PIN required.",
+        );
       }
-      if (!res.ok) {
-        $("#precard-info").textContent = "reveal failed";
-        show($("#precard-info"), true);
-        return;
-      }
+      if (!res.ok) return recover("reveal failed");
       const cipher = new Uint8Array(await res.arrayBuffer());
       bytes = await decryptBlob(master, id, "content", cipher, pin);
       sessionCache.set(id, bytes);
     }
+    await minPoof;
+    revealCtl?.stopRing();
     renderContent(bytes, meta);
     show($("#precard"), false);
-    show($("#revealed"), true);
+    const revealed = $("#revealed");
+    show(revealed, true);
+    // Materialize the revealed content as the poof clears (ADR-0014 flourish).
+    revealed.classList.add("materialize");
   } catch {
-    $("#precard-info").textContent = "decryption failed";
-    show($("#precard-info"), true);
-  } finally {
-    btn.disabled = false;
+    recover("decryption failed");
   }
 }
 

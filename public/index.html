@@ -69,7 +69,11 @@
             <label class="secret-toggle">show countdown
               <input id="show-countdown" type="checkbox" data-testid="show-countdown" checked />
             </label>
+            <label class="secret-toggle">require captcha to reveal
+              <input id="require-turnstile" type="checkbox" data-testid="require-turnstile" />
+            </label>
           </div>
+          <p class="opt-note">Leave the captcha off so an agent or script can reveal this poof from the link. Turn it on to require a human (browser) to open it.</p>
         </details>
 
         <button id="create-btn" class="poof-btn" data-testid="create-btn" disabled aria-label="create poof">
@@ -83,6 +87,7 @@
         <p class="panel-kicker">// your link</p>
         <div class="link-row">
           <input id="link" class="link" data-testid="link" readonly />
+          <button id="share-link" class="btn primary" data-testid="share-link" hidden>share</button>
           <button id="copy-link" class="btn" data-testid="copy-link">copy</button>
         </div>
         <p class="honesty">Anyone with this link can decrypt the poof. We never see its contents, and we cannot recover it. Lose the link and it is gone.</p>
@@ -109,9 +114,14 @@
         <p class="honesty">Revealing may consume the only copy. The metadata above was decrypted in your browser without spending a reveal.</p>
         <div id="pin-entry" hidden>
           <input id="reveal-pin" class="pin-input" type="text" maxlength="128" autocomplete="off" placeholder="enter PIN or password" data-testid="reveal-pin" />
+        </div>
+        <div id="reveal-ts-wrap" hidden>
           <div id="reveal-ts" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark"></div>
         </div>
-        <button id="reveal-btn" class="btn primary" data-testid="reveal-btn">Reveal</button>
+        <button id="reveal-btn" class="poof-btn" data-testid="reveal-btn" aria-label="reveal poof">
+          <canvas class="poof-field" aria-hidden="true"></canvas>
+          <span class="poof-label" data-testid="reveal-label">reveal poof</span>
+        </button>
         <p id="precard-info" class="error" hidden></p>
         <div class="reveal-cta">
           <a class="btn ghost" href="/">create your own poof</a>

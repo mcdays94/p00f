@@ -12,6 +12,10 @@ export interface CreateInput {
   revealBudget: number; // -1 = unlimited
   size: number;
   pin?: string;
+  // Creator opt-in: require a human Turnstile token to reveal (ADR-0015).
+  // Default false, so a poof is revealable by anyone with the link, including a
+  // headless agent (and a PIN poof is revealable by an agent that has the PIN).
+  requireTurnstile?: boolean;
   ownerHash?: string;
   ownerSalt?: string;
   inlineMax?: number; // content larger than this goes to R2
@@ -24,12 +28,17 @@ export type MetaResult =
       metadata: Uint8Array;
       revealsRemaining: number | null; // null = unlimited
       pinRequired: boolean;
+      turnstileRequired: boolean;
       size: number;
     };
 
 export type RevealResult =
   | { ok: true; content: Uint8Array }
-  | { ok: false; reason: "gone" | "pin_required" | "bad_pin" | "locked"; attemptsLeft?: number };
+  | {
+      ok: false;
+      reason: "gone" | "pin_required" | "bad_pin" | "locked" | "turnstile_required";
+      attemptsLeft?: number;
+    };
 
 // Discriminated result for owner-gated burn (ADR-0008). The "gone" reason is
 // not an error: a 1-reveal clip is lazily burned at reveal time, so by the
@@ -54,6 +63,7 @@ interface Row {
   locked_until: number;
   owner_hash: string | null;
   owner_salt: string | null;
+  require_turnstile: number;
 }
 
 const SCHEMA = `
@@ -73,7 +83,8 @@ const SCHEMA = `
     pin_attempts INTEGER NOT NULL DEFAULT 0,
     locked_until INTEGER NOT NULL DEFAULT 0,
     owner_hash TEXT,
-    owner_salt TEXT
+    owner_salt TEXT,
+    require_turnstile INTEGER NOT NULL DEFAULT 0
   )
 `;
 
@@ -87,6 +98,16 @@ export class ClipDO extends DurableObject<Env> {
 
   private ensureSchema(): void {
     this.ctx.storage.sql.exec(SCHEMA);
+    // Additive migration (ADR-0015): clip rows created before require_turnstile
+    // existed lack the column. ADD COLUMN brings them up to date; the duplicate-
+    // column guard makes it idempotent so it is safe to run on every instance.
+    try {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE clip ADD COLUMN require_turnstile INTEGER NOT NULL DEFAULT 0",
+      );
+    } catch (e) {
+      if (!(e instanceof Error && /duplicate column/i.test(e.message))) throw e;
+    }
   }
 
   // Reads the single clip row. Resilient to the table being dropped by a prior
@@ -95,7 +116,7 @@ export class ClipDO extends DurableObject<Env> {
     try {
       const rows = this.ctx.storage.sql
         .exec<Row>(
-          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt FROM clip WHERE id = 1",
+          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt, require_turnstile FROM clip WHERE id = 1",
         )
         .toArray();
       return rows.length ? rows[0] : null;
@@ -131,7 +152,7 @@ export class ClipDO extends DurableObject<Env> {
     }
 
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt, require_turnstile) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       now,
       expiresAt,
       input.revealBudget,
@@ -144,6 +165,7 @@ export class ClipDO extends DurableObject<Env> {
       pinIters,
       input.ownerHash ?? null,
       input.ownerSalt ?? null,
+      input.requireTurnstile ? 1 : 0,
     );
     await this.ctx.storage.setAlarm(expiresAt);
     return { ok: true };
@@ -170,11 +192,12 @@ export class ClipDO extends DurableObject<Env> {
       metadata: new Uint8Array(row.metadata),
       revealsRemaining,
       pinRequired: row.pin_hash != null,
+      turnstileRequired: row.require_turnstile === 1,
       size: row.size,
     };
   }
 
-  async reveal(pin?: string): Promise<RevealResult> {
+  async reveal(pin?: string, turnstileVerified?: boolean): Promise<RevealResult> {
     const row = this.row();
     if (!row) return { ok: false, reason: "gone" };
     if (Date.now() >= row.expires_at) {
@@ -184,6 +207,13 @@ export class ClipDO extends DurableObject<Env> {
     if (row.reveal_budget >= 0 && row.reveals_used >= row.reveal_budget) {
       await this.burn();
       return { ok: false, reason: "gone" };
+    }
+
+    // Reveal-Turnstile gate (ADR-0015), opt-in per clip. Checked before the PIN
+    // gate and before any budget spend, so a refused reveal is non-consuming.
+    // The Worker verifies the token (network + secret) and passes the boolean.
+    if (row.require_turnstile === 1 && !turnstileVerified) {
+      return { ok: false, reason: "turnstile_required" };
     }
 
     // PIN gate (ADR-0004). Wrong attempts never consume reveal budget; they

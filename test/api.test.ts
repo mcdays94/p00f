@@ -87,6 +87,37 @@ describe("Worker API", () => {
     expect(Array.from(new Uint8Array(await ok.arrayBuffer()))).toEqual([10, 20, 30]);
   });
 
+  it("opt-in requireTurnstile gates reveal until a human token arrives; non-consuming (ADR-0015)", async () => {
+    const fd = createForm({ revealBudget: 3 });
+    fd.set("requireTurnstile", "1");
+    const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: fd });
+    const { id } = (await cr.json()) as { id: string };
+
+    const meta = (await (await SELF.fetch(`${base}/api/clip/${id}/meta`)).json()) as { turnstileRequired: boolean };
+    expect(meta.turnstileRequired).toBe(true);
+
+    // No token -> 403, and it must not consume the budget.
+    expect((await SELF.fetch(`${base}/api/clip/${id}/reveal`, { method: "POST" })).status).toBe(403);
+    const stillThere = (await (await SELF.fetch(`${base}/api/clip/${id}/meta`)).json()) as { revealsRemaining: number };
+    expect(stillThere.revealsRemaining).toBe(3);
+
+    // Valid token (test secret accepts "tok") -> 200.
+    const ok = await SELF.fetch(`${base}/api/clip/${id}/reveal`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ turnstile: "tok" }),
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("a default clip reports turnstileRequired=false and reveals with no token (agent path, ADR-0015)", async () => {
+    const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: createForm({ revealBudget: 2 }) });
+    const { id } = (await cr.json()) as { id: string };
+    const meta = (await (await SELF.fetch(`${base}/api/clip/${id}/meta`)).json()) as { turnstileRequired: boolean };
+    expect(meta.turnstileRequired).toBe(false);
+    expect((await SELF.fetch(`${base}/api/clip/${id}/reveal`, { method: "POST" })).status).toBe(200);
+  });
+
   it("owner token deletes a clip; a link-holder without it cannot", async () => {
     const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: createForm({ revealBudget: 5 }) });
     const { id, ownerToken } = (await cr.json()) as { id: string; ownerToken: string };

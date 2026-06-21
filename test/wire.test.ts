@@ -25,6 +25,9 @@ describe("wire format contract", () => {
     expect(env.sizeBucket).toBe("tiny");
     expect(env.hasContent).toBe(true);
     expect(env.metadata).toBeTruthy();
+    // turnstileRequired is a cleartext signal so a caller knows up front whether
+    // it can reveal headlessly; it defaults to false (ADR-0015).
+    expect(env.turnstileRequired).toBe(false);
     // The exact size is never a cleartext field; only the coarse bucket is.
     expect(env).not.toHaveProperty("size");
     // The expiry deadline moved into the encrypted metadata (ADR-0014); it must

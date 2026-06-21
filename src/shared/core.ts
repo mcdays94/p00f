@@ -35,6 +35,9 @@ export interface CreateInput {
   revealBudget?: number;
   pin?: string;
   turnstile?: string;
+  // Creator opt-in: require a human Turnstile token to reveal (ADR-0015),
+  // default off. When off, the poof is revealable by a headless agent.
+  requireTurnstile?: boolean;
   // Creator preference for the recipient countdown (ADR-0014), default on.
   // Pass false to fold ClipMeta.showCountdown=false into the encrypted metadata
   // (e.g. the CLI --no-countdown flag). Omit to leave the default.
@@ -66,6 +69,7 @@ export async function create(http: HttpLike, baseUrl: string, input: CreateInput
     ttlMs: input.ttlMs,
     revealBudget: input.revealBudget,
     pin: input.pin,
+    requireTurnstile: input.requireTurnstile,
     turnstile: input.turnstile,
   });
   return { link: buildLink({ origin: baseUrl, id: serverId, key: master }), id: serverId, ownerToken };
@@ -76,6 +80,9 @@ export interface ClipInfo {
   meta?: ClipMeta;
   revealsRemaining: number | null;
   pinRequired: boolean;
+  // True when a human Turnstile token is required to reveal (ADR-0015). A
+  // headless caller can use this to decide whether it can complete the reveal.
+  turnstileRequired: boolean;
   expiresAt?: number;
 }
 
@@ -83,7 +90,8 @@ export interface ClipInfo {
 export async function info(http: HttpLike, link: string): Promise<ClipInfo> {
   const { origin, id, key } = parseLink(link);
   const m = await getMeta(http, origin, id);
-  if (!m.exists || !m.metadata) return { exists: false, revealsRemaining: null, pinRequired: false };
+  if (!m.exists || !m.metadata)
+    return { exists: false, revealsRemaining: null, pinRequired: false, turnstileRequired: false };
   let meta: ClipMeta | undefined;
   try {
     meta = JSON.parse(td.decode(await decryptBlob(key, id, "metadata", m.metadata))) as ClipMeta;
@@ -95,6 +103,7 @@ export async function info(http: HttpLike, link: string): Promise<ClipInfo> {
     meta,
     revealsRemaining: m.revealsRemaining,
     pinRequired: m.pinRequired,
+    turnstileRequired: m.turnstileRequired,
     // Expiry now comes from the decrypted metadata, not a cleartext field (ADR-0014).
     expiresAt: meta?.expiresAt,
   };
@@ -102,7 +111,7 @@ export async function info(http: HttpLike, link: string): Promise<ClipInfo> {
 
 export interface ReadResult {
   ok: boolean;
-  reason?: "gone" | "locked" | "pin" | "decrypt";
+  reason?: "gone" | "locked" | "pin" | "turnstile" | "decrypt";
   meta?: ClipMeta;
   content?: Uint8Array;
   attemptsLeft?: number;
