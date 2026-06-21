@@ -54,7 +54,6 @@
               <option value="-1">unlimited reveals</option>
             </select>
           </label>
-          <div id="ts-widget" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark"></div>
         </div>
 
         <details class="advanced more-options">
@@ -82,6 +81,11 @@
           </div>
           <p class="opt-note">Saved in your browser only (never sent to the server). The PIN, secret, and content are never remembered.</p>
         </details>
+
+        <div class="ts-row">
+          <div id="ts-widget" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark" data-callback="onTsCreate" data-expired-callback="onTsCreateExpired" data-error-callback="onTsCreateExpired"></div>
+          <p id="ts-ok" class="ts-ok" hidden>human verified ✓</p>
+        </div>
 
         <button id="create-btn" class="poof-btn" data-testid="create-btn" disabled aria-label="create poof">
           <canvas class="poof-field" aria-hidden="true"></canvas>
@@ -123,7 +127,8 @@
           <input id="reveal-pin" class="pin-input" type="text" maxlength="128" autocomplete="off" placeholder="enter PIN or password" data-testid="reveal-pin" />
         </div>
         <div id="reveal-ts-wrap" hidden>
-          <div id="reveal-ts" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark"></div>
+          <div id="reveal-ts" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark" data-callback="onTsReveal" data-expired-callback="onTsRevealExpired" data-error-callback="onTsRevealExpired"></div>
+          <p id="reveal-ts-ok" class="ts-ok" hidden>human verified ✓</p>
         </div>
         <button id="reveal-btn" class="poof-btn" data-testid="reveal-btn" aria-label="reveal poof">
           <canvas class="poof-field" aria-hidden="true"></canvas>
