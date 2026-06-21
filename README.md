@@ -73,17 +73,18 @@ sequenceDiagram
     participant S as p00f server
     participant R as Recipient
     Note over C: browser, CLI, or agent
-    C->>C: generate a random key, encrypt content locally
+    C->>C: generate a random key and encrypt locally
     C->>S: upload ciphertext only
-    S->>S: store in a per-clip Durable Object (TTL alarm + atomic reveal budget)
+    S->>S: store in a per-clip Durable Object
+    Note over S: TTL alarm plus atomic reveal budget
     S-->>C: clip id
-    C->>C: build link p00f.me/c/{id}#{key}
-    Note over C,R: the #{key} fragment never touches the server
+    C->>C: build the link with the key in the fragment
+    Note over C,R: the key fragment never touches the server
     C->>R: hand over the link
-    R->>S: fetch ciphertext for {id}
-    S->>S: spend one reveal; burn when the budget hits zero
+    R->>S: fetch ciphertext
+    S->>S: spend one reveal and burn when the budget is empty
     S-->>R: ciphertext
-    R->>R: decrypt locally with the key from the #fragment
+    R->>R: decrypt locally with the key from the fragment
 ```
 
 The recipient sees the plaintext. The infrastructure never does. Here is the same split, by what each side ever holds:
