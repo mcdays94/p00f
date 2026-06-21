@@ -18,6 +18,25 @@ describe("POOF-14: hostile-content render decisions (ADR-0012)", () => {
     expect(d.mime).toBe("image/png");
   });
 
+  it("plays video and audio inline in the sandbox (by kind or by mime)", () => {
+    expect(decideRender({ kind: "video", mime: "video/mp4", size: 9 }, new Uint8Array([0, 1, 2])).mode).toBe("video");
+    expect(decideRender({ kind: "audio", mime: "audio/mpeg", size: 9 }, new Uint8Array([0, 1, 2])).mode).toBe("audio");
+    // mime drives it even when the kind was generic.
+    expect(decideRender({ kind: "file", mime: "video/webm", size: 9 }, new Uint8Array([0, 1, 2])).mode).toBe("video");
+    expect(decideRender({ kind: "file", mime: "audio/ogg", size: 9 }, new Uint8Array([0, 1, 2])).mode).toBe("audio");
+  });
+
+  it("builds a video/audio sandbox message with bytes + mime (blob URL path)", () => {
+    const bytes = new Uint8Array([9, 8, 7, 6]);
+    const vid = buildSandboxMessage({ mode: "video", mime: "video/mp4" }, bytes);
+    expect(vid.type).toBe("poof-render");
+    expect(vid.mode).toBe("video");
+    if (vid.mode === "video") {
+      expect(vid.mime).toBe("video/mp4");
+      expect(new Uint8Array(vid.bytes)).toEqual(bytes);
+    }
+  });
+
   it("forces SVG to a download as octet-stream, never inline", () => {
     const byKind = decideRender({ kind: "svg", mime: "image/svg+xml", size: 5 }, te.encode("<svg>"));
     const byMime = decideRender({ kind: "image", mime: "image/svg+xml", size: 5 }, te.encode("<svg>"));

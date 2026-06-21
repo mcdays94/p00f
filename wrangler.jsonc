@@ -27,7 +27,7 @@
   // secret set via `wrangler secret put TURNSTILE_SECRET`. Local dev and the test
   // pool read Cloudflare's public always-pass test key from .dev.vars (gitignored).
   "vars": {
-    "MAX_CLIP_BYTES": "10485760",
+    "MAX_CLIP_BYTES": "26214400",
     "INLINE_MAX_BYTES": "1048576"
   }
 }

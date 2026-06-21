@@ -74,6 +74,13 @@
             </label>
           </div>
           <p class="opt-note">Leave the captcha off so an agent or script can reveal this poof from the link. Turn it on to require a human (browser) to open it.</p>
+          <div class="prefs-save">
+            <label class="pref-toggle">remember these settings on this device
+              <input id="remember-prefs" type="checkbox" data-testid="remember-prefs" />
+            </label>
+            <button type="button" id="reset-prefs" class="reset-prefs" data-testid="reset-prefs">reset to defaults</button>
+          </div>
+          <p class="opt-note">Saved in your browser only (never sent to the server). The PIN, secret, and content are never remembered.</p>
         </details>
 
         <button id="create-btn" class="poof-btn" data-testid="create-btn" disabled aria-label="create poof">

@@ -10,6 +10,7 @@ import {
 import { buildLink } from "../shared/link";
 import type { ClipMeta } from "../shared/core";
 import { isValidPin, PIN_MIN_LEN, PIN_MAX_LEN } from "../shared/pin";
+import { MAX_CLIP_BYTES, formatBytes } from "../shared/limits";
 import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, countdownFraction, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
@@ -92,6 +93,16 @@ let btnCtl: PoofBtnCtl | null = null;
 let revealCtl: PoofBtnCtl | null = null;
 
 function setPending(bytes: Uint8Array, meta: ClipMeta) {
+  // Pre-upload guard (friendly fast-fail): reject oversized content in the
+  // browser instead of uploading it just to get a 413 back. The Worker's check
+  // on the encrypted blob stays the authoritative cap.
+  if (meta.size > MAX_CLIP_BYTES) {
+    $("#create-error").textContent = `that's too big (${formatBytes(meta.size)}). Max is ${formatBytes(MAX_CLIP_BYTES)} per poof.`;
+    show($("#create-error"), true);
+    clearPending();
+    return;
+  }
+  show($("#create-error"), false);
   pending = { bytes, meta };
   $("#kind").textContent =
     meta.kind + (meta.filename ? ` · ${meta.filename}` : "") + ` · ${formatSize(meta.size)}`;
@@ -109,7 +120,14 @@ const urlModeOn = () => ($("#url-mode") as HTMLInputElement | null)?.checked ?? 
 
 async function loadFile(f: File) {
   const buf = new Uint8Array(await f.arrayBuffer());
-  const kind: string = f.type.startsWith("image/") ? "image" : "file";
+  const t = f.type;
+  const kind: string = t.startsWith("image/")
+    ? "image"
+    : t.startsWith("video/")
+      ? "video"
+      : t.startsWith("audio/")
+        ? "audio"
+        : "file";
   ($("#text") as HTMLTextAreaElement).value = "";
   setPending(buf, { kind, filename: f.name, mime: f.type || "application/octet-stream", size: buf.length });
 }
@@ -120,6 +138,98 @@ function turnstileToken(): string {
   // Dev/local fallback: the always-pass test secret accepts any token. In
   // production (real secret) this fallback fails verification, as intended.
   return r && r.length ? r : "tok";
+}
+
+// Opt-in persistence of the non-secret create settings (ttl, reveal budget,
+// show-countdown, require-captcha). localStorage, not a cookie: these are pure
+// client-side UI preferences with no server use, so they never leave the
+// browser (keeping the zero-knowledge posture). The PIN/password, the secret
+// toggle, and the content are deliberately never persisted.
+const PREFS_KEY = "poof:prefs";
+interface Prefs {
+  ttlMs?: string;
+  revealBudget?: string;
+  showCountdown?: boolean;
+  requireTurnstile?: boolean;
+}
+
+function readPrefs(): Prefs | null {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? (JSON.parse(raw) as Prefs) : null;
+  } catch {
+    return null;
+  }
+}
+
+function currentPrefs(): Prefs {
+  return {
+    ttlMs: ($("#ttl") as HTMLSelectElement).value,
+    revealBudget: ($("#budget") as HTMLSelectElement).value,
+    showCountdown: ($("#show-countdown") as HTMLInputElement).checked,
+    requireTurnstile: ($("#require-turnstile") as HTMLInputElement).checked,
+  };
+}
+
+// Apply saved prefs into the actual form controls so the restored state is
+// always visible (never a silent surprise). Stale select values that are no
+// longer offered are ignored.
+function applyPrefs(p: Prefs) {
+  const ttl = $("#ttl") as HTMLSelectElement;
+  const budget = $("#budget") as HTMLSelectElement;
+  if (p.ttlMs && [...ttl.options].some((o) => o.value === p.ttlMs)) ttl.value = p.ttlMs;
+  if (p.revealBudget && [...budget.options].some((o) => o.value === p.revealBudget)) budget.value = p.revealBudget;
+  if (typeof p.showCountdown === "boolean") ($("#show-countdown") as HTMLInputElement).checked = p.showCountdown;
+  if (typeof p.requireTurnstile === "boolean") ($("#require-turnstile") as HTMLInputElement).checked = p.requireTurnstile;
+}
+
+function setupPrefs() {
+  const remember = $("#remember-prefs") as HTMLInputElement | null;
+  if (!remember) return;
+  const reset = $("#reset-prefs") as HTMLButtonElement | null;
+
+  const saved = readPrefs();
+  if (saved) {
+    applyPrefs(saved);
+    remember.checked = true;
+    // Open the panel so the restored (possibly non-default) settings are seen.
+    const det = document.querySelector(".more-options") as HTMLDetailsElement | null;
+    if (det) det.open = true;
+  }
+
+  const persistIfOn = () => {
+    if (!remember.checked) return;
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(currentPrefs()));
+    } catch {
+      /* storage blocked or full: persistence is best-effort */
+    }
+  };
+  ["#ttl", "#budget", "#show-countdown", "#require-turnstile"].forEach((sel) =>
+    $(sel)?.addEventListener("change", persistIfOn),
+  );
+  remember.addEventListener("change", () => {
+    if (remember.checked) persistIfOn();
+    else {
+      try {
+        localStorage.removeItem(PREFS_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+  reset?.addEventListener("click", () => {
+    ($("#ttl") as HTMLSelectElement).value = "300000";
+    ($("#budget") as HTMLSelectElement).value = "1";
+    ($("#show-countdown") as HTMLInputElement).checked = true;
+    ($("#require-turnstile") as HTMLInputElement).checked = false;
+    remember.checked = false;
+    try {
+      localStorage.removeItem(PREFS_KEY);
+    } catch {
+      /* ignore */
+    }
+  });
 }
 
 function initCreate() {
@@ -222,6 +332,7 @@ function initCreate() {
     location.href = "/";
   });
   $("#delete-now").addEventListener("click", () => void doDeleteNow());
+  setupPrefs();
 }
 
 async function doDeleteNow() {
@@ -473,7 +584,14 @@ async function doCreate() {
     fd.set("content", new Blob([contentCipher]));
 
     const res = await fetch("/api/clip", { method: "POST", body: fd });
-    if (!res.ok) throw new Error(`create failed (${res.status})`);
+    if (!res.ok) {
+      if (res.status === 413) {
+        const body = (await res.json().catch(() => ({}))) as { maxBytes?: number };
+        const max = typeof body.maxBytes === "number" ? body.maxBytes : MAX_CLIP_BYTES;
+        throw new Error(`that's too big. Max is ${formatBytes(max)} per poof.`);
+      }
+      throw new Error(`create failed (${res.status})`);
+    }
     const { id: serverId, ownerToken } = (await res.json()) as { id: string; ownerToken: string };
     lastClipId = serverId;
     lastOwnerToken = ownerToken;
@@ -487,7 +605,7 @@ async function doCreate() {
   } catch (err) {
     btnCtl?.stopRing();
     btnCtl?.startIdle();
-    $("#create-error").textContent = String(err);
+    $("#create-error").textContent = err instanceof Error ? err.message : String(err);
     show($("#create-error"), true);
     btn.disabled = false;
   }
@@ -687,10 +805,12 @@ async function doReveal(
     revealCtl?.stopRing();
     renderContent(bytes, meta);
     show($("#precard"), false);
+    // Add the entrance class while still hidden, then unhide, so the animation
+    // starts cleanly from display:none -> block (no first-frame flash). Without
+    // a fill-mode the base opacity (1) governs if the animation never runs.
     const revealed = $("#revealed");
-    show(revealed, true);
-    // Materialize the revealed content as the poof clears (ADR-0014 flourish).
     revealed.classList.add("materialize");
+    show(revealed, true);
   } catch {
     recover("decryption failed");
   }
@@ -835,6 +955,15 @@ function renderContent(bytes: Uint8Array, meta: ClipMeta) {
     mountSandbox(host, buildSandboxMessage(decision, bytes), () => copyImageBytes(bytes, imgMime));
     actions.appendChild(actionButton("copy image", () => copyImageBytes(bytes, imgMime)));
     actions.appendChild(actionButton("download", () => download(bytes, meta.filename ?? "image", meta.mime ?? "image/png")));
+  } else if (decision.mode === "video" || decision.mode === "audio") {
+    // Inline playback in the opaque-origin sandbox (blob URL, ADR-0012). No
+    // corner copy icon (copying raw media bytes is not useful); offer a download.
+    mountSandbox(host, buildSandboxMessage(decision, bytes));
+    actions.appendChild(
+      actionButton("download", () =>
+        download(bytes, meta.filename ?? decision.mode, meta.mime ?? "application/octet-stream"),
+      ),
+    );
   } else if (decision.mode === "link") {
     // Masked URL (ADR-0013). Rendered in the key-holding parent (the sandbox
     // cannot open a new tab), so the safeHttpUrl scheme allowlist is the

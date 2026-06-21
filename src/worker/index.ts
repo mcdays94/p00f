@@ -2,6 +2,7 @@ import { ClipDO } from "./clip-do";
 import type { Env } from "./types";
 import { generateClipId, base64urlEncode, generateOwnerToken } from "../shared/crypto";
 import { isValidPin } from "../shared/pin";
+import { MAX_CLIP_BYTES, INLINE_MAX_BYTES } from "../shared/limits";
 import { buildEnvelope, discoveryDoc, llmsTxt } from "../shared/wire";
 import { SANDBOX_HTML, SANDBOX_CSP } from "../shared/sandbox-doc";
 import { verifyTurnstile } from "./turnstile";
@@ -112,7 +113,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     return json({ error: "bad_request" }, 400);
   }
 
-  const maxBytes = Number(env.MAX_CLIP_BYTES);
+  const maxBytes = Number(env.MAX_CLIP_BYTES) || MAX_CLIP_BYTES;
   if (content.size > maxBytes) return json({ error: "too_large", maxBytes }, 413);
 
   const ttlMs = clampTtl(Number(form.get("ttlMs")));
@@ -149,7 +150,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     requireTurnstile,
     ownerHash,
     ownerSalt,
-    inlineMax: Number(env.INLINE_MAX_BYTES),
+    inlineMax: Number(env.INLINE_MAX_BYTES) || INLINE_MAX_BYTES,
   });
 
   return json({ id, ownerToken });

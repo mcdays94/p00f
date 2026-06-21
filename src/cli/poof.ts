@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { create, read, info, burn } from "../shared/core";
 import { parseArgs, ttlToMs, readsToBudget, inferKind } from "./args";
+import { MAX_CLIP_BYTES, formatBytes } from "../shared/limits";
 import { webcrypto } from "node:crypto";
 
 // Node 18 does not expose Web Crypto as a global; @p00f/core relies on it.
@@ -32,6 +33,8 @@ function guessMime(name) {
     txt: "text/plain", md: "text/markdown", json: "application/json", js: "text/javascript",
     ts: "text/typescript", csv: "text/csv", html: "text/html", png: "image/png",
     jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf",
+    mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", mov: "video/quicktime", mkv: "video/x-matroska",
+    mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac",
   }[ext];
 }
 
@@ -64,6 +67,8 @@ async function cmdCreate(a) {
     content = await readStdin();
   }
   if (!content.length) die("nothing to create: empty input", 2);
+  if (content.length > MAX_CLIP_BYTES)
+    die(`too big (${formatBytes(content.length)}); max is ${formatBytes(MAX_CLIP_BYTES)} per poof`, 2);
 
   let ttlMs, revealBudget;
   try {

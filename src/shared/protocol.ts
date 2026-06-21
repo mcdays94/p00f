@@ -3,6 +3,7 @@
 // The Fragment Key is NEVER passed to anything in this module, so no shell built
 // on it can leak the key to the server.
 import { base64urlDecode } from "./crypto";
+import { MAX_CLIP_BYTES, formatBytes } from "./limits";
 
 export type HttpLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -53,7 +54,14 @@ export async function createClip(
   fd.set("meta", new Blob([c.metaCipher as BlobPart]));
   fd.set("content", new Blob([c.contentCipher as BlobPart]));
   const res = await http(`${trimBase(baseUrl)}/api/clip`, { method: "POST", body: fd });
-  if (!res.ok) throw new Error(`create failed (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 413) {
+      const body = (await res.json().catch(() => ({}))) as { maxBytes?: number };
+      const max = typeof body.maxBytes === "number" ? body.maxBytes : MAX_CLIP_BYTES;
+      throw new Error(`too large to create (max ${formatBytes(max)} per poof)`);
+    }
+    throw new Error(`create failed (${res.status})`);
+  }
   return (await res.json()) as { id: string; ownerToken: string };
 }
 

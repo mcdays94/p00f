@@ -39,7 +39,7 @@ The number of times a Clip may be revealed before it burns. Default 1. Counts Re
 _Avoid_: views, reads, "number of users".
 
 **Kind**:
-The category of a Clip's content that drives how it renders. Inferred client-side at create time and stored in the Clip's encrypted metadata, so the server never learns it. An open set of understood values rather than a fixed list: text, code, image, file, secret, and url. The web app renders each understood Kind and falls back to text-or-download for anything else.
+The category of a Clip's content that drives how it renders. Inferred client-side at create time and stored in the Clip's encrypted metadata, so the server never learns it. An open set of understood values rather than a fixed list: text, code, image, file, secret, url, video, and audio. The web app renders each understood Kind (video/audio play inline in the reveal sandbox via a blob URL, ADR-0012/0003) and falls back to text-or-download for anything else.
 _Avoid_: type, format, mime (reserve "Kind" for this content category).
 
 **Masked URL**:
@@ -80,5 +80,5 @@ _Avoid_: admin key, management password, delete key.
 - "secure" was used to mean confidentiality. Resolved: we mean **Zero-Knowledge** (server holds only ciphertext). Access control (expiry/PIN/approval) is tracked separately and is not "security" in the confidentiality sense.
 - "read by X users" was used for the burn limit. Resolved: with no identity to dedupe on, we count **Reveals** (ciphertext releases), not users. The canonical term is **Reveal budget** and the UI says "reveals," never "users."
 - A "URL shortener" was requested but rejected: a server-resolvable short link would break Zero-Knowledge (ADR-0001, ADR-0010), and a poof Link cannot be short because it carries the Fragment Key. Resolved: the **Masked URL** Kind (`url`) masks a destination behind a Link without shortening it or resolving it server-side (ADR-0013).
-- "Kind" was originally a fixed four-way set (text, code, image, file). It has since grown (secret in v2, url for masked links) and is now an open set of understood values; the term no longer implies exactly four.
+- "Kind" was originally a fixed four-way set (text, code, image, file). It has since grown (secret in v2, url for masked links, video + audio for inline media) and is now an open set of understood values; the term no longer implies exactly four.
 - The TTL deadline was a cleartext envelope field. Resolved (ADR-0014): it moved into the Clip's encrypted metadata so only a Fragment-Key holder can read it (real privacy from the server and API scrapers). The server keeps its own authoritative expiry to run the Burn but no longer publishes it; the recipient-facing **Countdown** is rendered from the decrypted metadata.

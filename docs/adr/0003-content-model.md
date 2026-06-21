@@ -19,3 +19,8 @@ Poof supports four Clip kinds (text, code, image, file), all entered through a s
 - Link unfurlers cannot populate the card: no Fragment Key and no JS execution, so the metadata stays opaque to them. Auto-fetching the metadata blob on load is therefore safe (non-consuming and undecryptable by bots).
 - Residual leak: ciphertext length approximates content size, consistent with the size shown to the recipient. Optional padding to size buckets can be added later.
 - This refines the "content type stored inside the encrypted payload" note in ADR-0001: the type now lives in a dedicated encrypted metadata blob. The zero-knowledge guarantee is unchanged.
+
+## Later additions
+
+- The four original kinds became an **open set**: `secret` (masked-until-shown), `url` (masked link, ADR-0013), and `video` / `audio` (added 2026-06-21). The client infers `video`/`audio` from the file's MIME type at create time; the server still never learns the kind.
+- **Video and audio render inline on reveal** in the opaque-origin sandbox via a blob URL, the same isolation as images (ADR-0012; the sandbox CSP gained `media-src blob:`), with a download fallback. The Fragment Key never enters the sandbox. Short clips only, bounded by the content cap (ADR-0006).

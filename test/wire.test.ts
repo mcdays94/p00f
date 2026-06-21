@@ -48,6 +48,9 @@ describe("wire format contract", () => {
     expect(d.endpoints.envelope).toContain("/c/:id.json");
     // origin trailing slash is normalised
     expect(d.endpoints.health).toBe("GET https://p00f.test/health");
+    // The byte limits are published so an agent can size an upload up front.
+    expect(d.limits.maxClipBytes).toBeGreaterThan(0);
+    expect(d.limits.inlineMaxBytes).toBeGreaterThan(0);
   });
 
   it("renders llms.txt with the decryptable wire format and the fragment rule", () => {
@@ -57,6 +60,7 @@ describe("wire format contract", () => {
     expect(txt).toContain("poof/metadata/v1");
     expect(txt).toContain("poof/content/v1");
     expect(txt).toContain("fragment");
+    expect(txt).toContain("Max content size");
     // No em-dashes in published content (house rule).
     expect(txt).not.toContain("\u2014");
   });

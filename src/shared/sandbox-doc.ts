@@ -18,7 +18,7 @@ import { LANGS } from "./highlight";
 // because the sandbox holds no key and cannot reach the parent. frame-ancestors
 // 'self' limits who may embed it to the same-origin app.
 export const SANDBOX_CSP =
-  "default-src 'none'; img-src blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors 'self'";
+  "default-src 'none'; img-src blob: data:; media-src blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors 'self'";
 
 // Serialize the grammars as a JS object literal. JSON.stringify is valid JS,
 // and we escape '<' to its \u003c form so a grammar pattern that contains '<'
@@ -33,7 +33,8 @@ export const SANDBOX_HTML = `<!doctype html>
 html,body{margin:0}
 body{font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#ededed;background:#1b1b1e}
 #r{padding:14px;white-space:pre-wrap;word-break:break-word}
-img{max-width:100%;height:auto;display:block;border-radius:8px}
+img,video{max-width:100%;height:auto;display:block;border-radius:8px}
+audio{width:100%;display:block}
 pre.code{margin:0;padding:0;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:#ededed;background:transparent;border:0}
 pre.code .t-c{color:#8a8a92;font-style:italic}
 pre.code .t-s{color:#3ad29f}
@@ -154,6 +155,20 @@ pre.code .t-o{color:#c94f4f}
       i.onerror = postSize;
       i.src = u;
       r.appendChild(i);
+    } else if (m.mode === "video" || m.mode === "audio") {
+      // Play media inline via a blob URL (CSP allows media-src blob:). The
+      // sandbox is opaque-origin and never holds the key, so even a malicious
+      // media payload cannot reach the parent's fragment. Controls let the
+      // viewer play/scrub; size is posted once metadata (dimensions) is known.
+      var mu = URL.createObjectURL(new Blob([m.bytes], { type: m.mime || "application/octet-stream" }));
+      var el = document.createElement(m.mode);
+      el.controls = true;
+      el.preload = "metadata";
+      if (m.mode === "video") el.setAttribute("playsinline", "");
+      el.onloadedmetadata = postSize;
+      el.onerror = postSize;
+      el.src = mu;
+      r.appendChild(el);
     }
   });
   parent.postMessage("poof-sandbox-ready", "*");

@@ -8,7 +8,7 @@
 // into the sandbox, so the key cannot reach the sandbox by construction.
 import type { ClipMeta } from "../shared/core";
 
-export type RenderMode = "text" | "code" | "image" | "secret" | "link" | "download";
+export type RenderMode = "text" | "code" | "image" | "video" | "audio" | "secret" | "link" | "download";
 
 export interface RenderDecision {
   mode: RenderMode;
@@ -59,6 +59,14 @@ export function decideRender(meta: ClipMeta, bytes: Uint8Array): RenderDecision 
   if (isSvg(meta)) return { mode: "download", mime: "application/octet-stream", filename: meta.filename };
   if (kind === "image" || (meta.mime ?? "").startsWith("image/")) {
     return { mode: "image", mime: meta.mime ?? "application/octet-stream" };
+  }
+  // Video / audio play inline in the opaque-origin sandbox via a blob URL, the
+  // same isolation as images (ADR-0012); the key never enters the sandbox.
+  if (kind === "video" || (meta.mime ?? "").startsWith("video/")) {
+    return { mode: "video", mime: meta.mime ?? "application/octet-stream" };
+  }
+  if (kind === "audio" || (meta.mime ?? "").startsWith("audio/")) {
+    return { mode: "audio", mime: meta.mime ?? "application/octet-stream" };
   }
   if (kind === "file") return { mode: "download", mime: meta.mime, filename: meta.filename };
   if (kind === "url") return { mode: "link" };
@@ -143,18 +151,25 @@ export function countdownFraction(now: number, openedAt: number, expiresAt: numb
 export type SandboxMessage =
   | { type: "poof-render"; mode: "text"; text: string }
   | { type: "poof-render"; mode: "code"; text: string }
-  | { type: "poof-render"; mode: "image"; bytes: ArrayBuffer; mime: string };
+  | { type: "poof-render"; mode: "image"; bytes: ArrayBuffer; mime: string }
+  | { type: "poof-render"; mode: "video"; bytes: ArrayBuffer; mime: string }
+  | { type: "poof-render"; mode: "audio"; bytes: ArrayBuffer; mime: string };
 
 // The plaintext bytes flow into the opaque-origin sandbox document
 // (public/sandbox.html) through this message only. The sandbox renders text via
 // textContent (never HTML), code via the inlined highlighter (token text still
 // rendered via textContent), or an image via a blob URL. The key is never here.
 export function buildSandboxMessage(decision: RenderDecision, bytes: Uint8Array): SandboxMessage {
-  if (decision.mode === "image") {
+  if (decision.mode === "image" || decision.mode === "video" || decision.mode === "audio") {
     // Copy into a standalone ArrayBuffer so we never transfer (and detach) the
-    // caller's cached bytes.
+    // caller's cached bytes. The sandbox wraps these in a blob URL.
     const copy = bytes.slice();
-    return { type: "poof-render", mode: "image", bytes: copy.buffer, mime: decision.mime ?? "application/octet-stream" };
+    return {
+      type: "poof-render",
+      mode: decision.mode,
+      bytes: copy.buffer,
+      mime: decision.mime ?? "application/octet-stream",
+    };
   }
   if (decision.mode === "code") {
     return { type: "poof-render", mode: "code", text: tdLoose.decode(bytes) };

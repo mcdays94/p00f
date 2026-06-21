@@ -1,8 +1,8 @@
-# 0006 - Storage: one Durable Object per Clip, hybrid inline/R2, 10 MB cap
+# 0006 - Storage: one Durable Object per Clip, hybrid inline/R2, 25 MB cap
 
-**Status:** accepted
+**Status:** accepted (cap raised from 10 MB to 25 MB on 2026-06-21 to support short video/audio; still the buffered-path ceiling)
 
-Each Clip is backed by its own SQLite-backed Durable Object (DO id = clip id), which owns the Clip's entire lifecycle. Content up to ~1 MB is stored inline in the DO; larger content is stored as ciphertext in R2 with the DO holding the key. R2 is a required binding. Clips are capped at 10 MB (deployer-configurable).
+Each Clip is backed by its own SQLite-backed Durable Object (DO id = clip id), which owns the Clip's entire lifecycle. Content up to ~1 MB is stored inline in the DO; larger content is stored as ciphertext in R2 with the DO holding the key. R2 is a required binding. Clips are capped at 25 MB (deployer-configurable).
 
 ## Platform facts that drive this (verified 2026-06-19)
 
@@ -15,7 +15,7 @@ Each Clip is backed by its own SQLite-backed Durable Object (DO id = clip id), w
 - **One Durable Object per Clip.** The DO is the single source of truth and lifecycle owner: metadata blob, reveal budget, PIN hash + lockout state, TTL alarm, and content (inline or R2 key). Single-threaded execution provides the atomic reveal-budget and PIN-attempt counters; the per-object alarm fires the burn.
 - **Hybrid content storage.** Content blob ≤ ~1 MB is stored inline in the DO's SQLite (comfortably under the 2 MB ceiling; exact threshold is a build-time tunable). Larger content is stored as ciphertext in **R2**; the DO holds the object key.
 - **R2 is required** (option A). One storage story for all content. R2's free tier covers ephemeral blobs; creating a bucket is a wrangler one-liner.
-- **Max Clip size: 10 MB**, configurable by the deployer via env var. Larger than ~25 MB would require streaming/multipart upload plus chunked encryption, which is out of v1 scope.
+- **Max Clip size: 25 MB**, configurable by the deployer via env var (`MAX_CLIP_BYTES`; the in-code default lives in `src/shared/limits.ts` and is shared with the clients for pre-flight checks). 25 MB is the ceiling of the buffered upload path: the Worker reads the entire multipart body into its ~128 MiB isolate (and copies it once) before streaming to R2, so doubling a 25 MB body still leaves headroom. Materially higher needs streamed / presigned R2 uploads plus chunked encryption, which remains out of scope. The cap is enforced on the encrypted blob; an oversized create returns HTTP 413 `{ error: "too_large", maxBytes }`, and the web + CLI clients also pre-check the size before uploading for a friendly fast-fail.
 - **Reveal of R2-backed content is proxied through the Worker/DO** after the DO authorizes (budget + PIN). Never a public or presigned R2 URL, because that would bypass budget/PIN/burn enforcement.
 
 ## Flow

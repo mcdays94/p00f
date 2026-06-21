@@ -86,6 +86,8 @@ export function inferKind(opts: {
 }): string {
   if (opts.explicit) return opts.explicit;
   if (opts.mime && opts.mime.startsWith("image/")) return "image";
+  if (opts.mime && opts.mime.startsWith("video/")) return "video";
+  if (opts.mime && opts.mime.startsWith("audio/")) return "audio";
   if (opts.isBinary) return "file";
   if (opts.filename) return "file";
   return "text";
