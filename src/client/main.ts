@@ -67,14 +67,23 @@ async function copyToClipboard(text: string): Promise<void> {
   }
 }
 
+// Snarky one-liners for the share sheet; one is picked at random per share so it
+// stays fresh. House style: no em-dashes.
+const SHARE_BLURBS = [
+  "Psst. Open this before it ghosts you.",
+  "A secret, just for you. Read fast, it self-destructs.",
+  "Top secret. This one actually self-destructs.",
+];
+
 // Native share sheet for the generated link (great on mobile). Falls back to a
 // copy if the user cancels or the platform rejects the payload. Only the link
 // is shared; the Fragment Key is in the link, so anyone shared-with can decrypt.
 async function shareLink(): Promise<void> {
   const url = ($("#link") as HTMLInputElement).value;
   if (!url || url === "(burned)") return;
+  const text = SHARE_BLURBS[(Math.random() * SHARE_BLURBS.length) | 0];
   try {
-    await navigator.share({ title: "p00f", text: "A poof for you (zero-knowledge, expires soon):", url });
+    await navigator.share({ title: "p00f", text, url });
   } catch {
     /* user cancelled, or share unavailable: leave the copy button as the fallback */
   }
