@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>p00f hero banner</title>
+<style>
+  /* Mirrors public/styles.css: Raycast-ish dark palette + the 22px dot grid. */
+  :root {
+    --bg: #0a0a0b;
+    --text: #ededed;
+    --muted: #8a8a92;
+    --coral: #ff6363;
+    --green: #3ad29f;
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); }
+  .banner {
+    position: relative;
+    width: 1100px;
+    height: 300px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 1px 1px, #1d1d20 1px, transparent 0) 0 0 / 22px 22px,
+      var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .field { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .stack {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    pointer-events: none;
+  }
+  .label {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 78px;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .label .dot { color: var(--coral); }
+  .label .pr { color: var(--green); }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 14px;
+    letter-spacing: 0.36em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <div class="banner" id="banner">
+    <canvas class="field" id="field"></canvas>
+    <div class="stack">
+      <div class="label" id="label">p00f<span class="dot">.</span></div>
+      <div class="kicker" id="kicker">zero-knowledge ephemeral clipboard</div>
+    </div>
+  </div>
+  <script>
+  // ----- self-running, seamless-looping p00f hero -----
+  // Reuses the real poof-button constants (src/client/main.ts setupPoofButton):
+  // the drift glyph set, the scramble charset, the coral smoke-ring palette.
+  // Everything is a pure function of loop-time t in [0, LOOP), so the GIF loops
+  // cleanly and the recording can start at any moment.
+
+  const LOOP = 6000; // ms per cycle
+  const banner = document.getElementById("banner");
+  const cv = document.getElementById("field");
+  const ctx = cv.getContext("2d");
+  const label = document.getElementById("label");
+  const kicker = document.getElementById("kicker");
+
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let W = 0, H = 0;
+  function fit() {
+    const r = banner.getBoundingClientRect();
+    W = r.width; H = r.height;
+    cv.width = Math.max(1, W * dpr);
+    cv.height = Math.max(1, H * dpr);
+  }
+  fit();
+  window.addEventListener("resize", fit);
+
+  // ---- drift field: sparse, faint, vertically periodic over LOOP (seamless) ----
+  const glyphs = "01<>/{}#*\u00b7\u00b0".split("");
+  // Each particle scrolls up k full heights per loop, so it returns to its start
+  // at t = LOOP. k in {1,2,3} gives gentle parallax. x and glyph are fixed.
+  const field = Array.from({ length: 30 }, () => ({
+    x: Math.random(),                 // 0..1 of width
+    y0: Math.random(),                // 0..1 of height
+    ch: glyphs[(Math.random() * glyphs.length) | 0],
+    a: 0.05 + Math.random() * 0.11,
+    k: 1 + ((Math.random() * 3) | 0), // 1..3
+  }));
+
+  function drawField(t) {
+    ctx.font = (Math.round(13)) + 'px "SF Mono", ui-monospace, monospace';
+    ctx.textAlign = "start";
+    ctx.textBaseline = "alphabetic";
+    for (const g of field) {
+      const y = (((g.y0 - (g.k * (t / LOOP))) % 1) + 1) % 1;
+      ctx.fillStyle = "rgba(237,237,237," + g.a + ")";
+      ctx.fillText(g.ch, g.x * W, y * H);
+    }
+  }
+
+  // ---- coral smoke ring (one expanding sweep that fully dissipates) ----
+  // Leading glyphs match the button ring; a longer fading "\u00b7" dust tail gives
+  // the wide banner a fuller smoke sweep (TAIL > PAL length).
+  const TAIL = 9;
+  function smokeChar(k) {
+    return k === 0 ? "\u2726" : k === 1 ? "*" : k === 2 ? "o" : k === 3 ? "\u00b0" : "\u00b7";
+  }
+  function drawSmoke(p) { // p in [0,1) progress through the smoke phase
+    const fs = 16;
+    ctx.font = fs + 'px "SF Mono", ui-monospace, monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const cw = ctx.measureText("M").width || fs * 0.6;
+    const lh = Math.round(fs * 1.15);
+    const cols = Math.max(8, Math.floor(W / cw));
+    const rows = Math.max(5, Math.floor(H / lh));
+    const cx = (cols - 1) / 2;
+    const cy = (rows - 1) / 2;
+    const aspect = lh / cw;
+    const maxD = Math.hypot(cx, cy * aspect) + TAIL;
+    const F = p * maxD; // 0 -> maxD: grows from center, then clears past the edges
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++) {
+        const d = Math.hypot(x - cx, (y - cy) * aspect);
+        const k = Math.round(F - d);
+        if (k >= 0 && k < TAIL) {
+          ctx.fillStyle = k === 0 ? "#ff6363" : "rgba(255,99,99," + Math.max(0.06, 0.82 - k * 0.1) + ")";
+          ctx.fillText(smokeChar(k), (x + 0.5) * cw, (y + 0.5) * lh);
+        }
+      }
+  }
+
+  // ---- deterministic label scrambler ----
+  const SCR = "!<>-_\\/[]{}=+*?#@%".split("");
+  // Returns the scrambled text for transitioning `from` -> `to` at progress p.
+  function scrambleText(from, to, p, t) {
+    const n = Math.max(from.length, to.length);
+    let out = "";
+    for (let i = 0; i < n; i++) {
+      const s = (i / n) * 0.55;       // staggered start per char
+      const e = s + 0.4;              // resolve window
+      if (p >= e) out += to[i] || "";
+      else if (p >= s) out += SCR[(((t / 45) | 0) + i * 7) % SCR.length];
+      else out += from[i] || "";
+    }
+    return out;
+  }
+
+  const WORD = "p00f.";
+  const CMD = "$ poof";
+  const wordHtml = 'p00f<span class="dot">.</span>';
+  const cmdHtml = '<span class="pr">$</span> poof';
+
+  // phase timeline (ms within LOOP)
+  const T = {
+    scram1: [2200, 2620],  // wordmark p00f. -> command $ poof
+    holdCmd: [2620, 3150], // hold the command
+    smoke: [3150, 4480],   // coral ring sweeps once and clears (the "poof")
+    reform: [4480, 5060],  // wordmark materialises out of scramble noise
+  };
+  const seg = (t, a, b) => (t - a) / (b - a);
+
+  function setLabel(html, visible) {
+    label.style.visibility = visible ? "visible" : "hidden";
+    if (label.innerHTML !== html) label.innerHTML = html;
+  }
+  function setLabelText(txt) {
+    label.style.visibility = "visible";
+    if (label.textContent !== txt) label.textContent = txt;
+  }
+
+  function kickerOpacity(t) {
+    if (t < 3000) return 1;
+    if (t < 3150) return 1 - (t - 3000) / 150; // fade out before the smoke
+    if (t < 4900) return 0;                    // gone through smoke + early reform
+    if (t < 5300) return (t - 4900) / 400;     // fade back in as the wordmark reforms
+    return 1;
+  }
+
+  function frame(now) {
+    const t = now % LOOP;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    drawField(t);
+
+    if (t >= T.scram1[0] && t < T.scram1[1]) {
+      setLabelText(scrambleText(WORD, CMD, seg(t, T.scram1[0], T.scram1[1]), t));
+    } else if (t >= T.holdCmd[0] && t < T.holdCmd[1]) {
+      setLabel(cmdHtml, true);
+    } else if (t >= T.smoke[0] && t < T.smoke[1]) {
+      setLabel(cmdHtml, false);
+      drawSmoke(seg(t, T.smoke[0], T.smoke[1]));
+    } else if (t >= T.reform[0] && t < T.reform[1]) {
+      // materialise the wordmark out of scramble noise (from "" -> "p00f.")
+      setLabelText(scrambleText("", WORD, seg(t, T.reform[0], T.reform[1]), t));
+    } else {
+      setLabel(wordHtml, true);
+    }
+
+    kicker.style.opacity = String(kickerOpacity(t));
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
