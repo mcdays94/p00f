@@ -8,7 +8,7 @@
 Encrypt something, get a link that self-destructs, hand it off. The server only ever holds ciphertext.</p>
 
 <p align="center">
-  <a href="https://p00f.me"><img alt="Create a poof" src="https://img.shields.io/badge/Create%20a%20poof-FF6363?style=for-the-badge" /></a>
+  <a href="https://p00f.me"><img src="docs/create-button.gif" width="58%" alt="The genuine p00f create button: a rounded dark panel over a faint drifting field of monospace glyphs, with a centered mono label that ascii-scrambles between 'create poof' and the terminal command '$ poof'. Click it to create a poof at p00f.me." /></a>
 </p>
 
 <p align="center">
