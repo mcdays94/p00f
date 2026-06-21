@@ -8,7 +8,7 @@
 Encrypt something, get a link that self-destructs, hand it off. The server only ever holds ciphertext.</p>
 
 <p align="center">
-  <a href="https://p00f.me"><img alt="Create a poof at p00f.me" src="https://img.shields.io/badge/Create%20a%20poof%20at%20p00f.me-FF6363?style=for-the-badge" /></a>
+  <a href="https://p00f.me"><img alt="Create a poof" src="https://img.shields.io/badge/Create%20a%20poof-FF6363?style=for-the-badge" /></a>
 </p>
 
 <p align="center">
