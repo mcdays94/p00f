@@ -9,6 +9,7 @@ import {
 } from "../shared/crypto";
 import { buildLink } from "../shared/link";
 import type { ClipMeta } from "../shared/core";
+import { isValidPin, PIN_MIN_LEN, PIN_MAX_LEN } from "../shared/pin";
 import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, countdownFraction, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
@@ -394,6 +395,19 @@ async function doCreate() {
   if (!pending) return;
   const btn = $("#create-btn") as HTMLButtonElement;
   if (btn.disabled) return;
+
+  // Validate the optional PIN/password up front (ADR-0004, variable length) so
+  // an invalid value surfaces immediately instead of being silently dropped.
+  const pinRaw = ($("#pin") as HTMLInputElement).value.trim();
+  if (pinRaw && !isValidPin(pinRaw)) {
+    $("#create-error").textContent = `PIN or password must be ${PIN_MIN_LEN} to ${PIN_MAX_LEN} characters`;
+    show($("#create-error"), true);
+    return;
+  }
+  const pin = pinRaw || undefined;
+  // Creator's show/hide-countdown choice (ADR-0014), default on.
+  const showCountdown = ($("#show-countdown") as HTMLInputElement | null)?.checked ?? true;
+
   btn.disabled = true;
   show($("#create-error"), false);
   btnCtl?.startRing();
@@ -402,13 +416,14 @@ async function doCreate() {
   try {
     const master = generateMasterKey();
     const id = generateClipId();
-    const pinRaw = ($("#pin") as HTMLInputElement).value.trim();
-    const pin = /^\d{4}$/.test(pinRaw) ? pinRaw : undefined;
     const ttlMs = Number(($("#ttl") as HTMLSelectElement).value);
 
     // Stamp the expiry deadline into the encrypted metadata (ADR-0014) so the
-    // recipient can render a private countdown; the server never sees it.
-    const meta = { ...pending.meta, expiresAt: Date.now() + ttlMs };
+    // recipient can render a private countdown; the server never sees it. The
+    // creator's show/hide-countdown choice rides along (default on, so the
+    // flag is only written when off, keeping the metadata minimal).
+    const meta: ClipMeta = { ...pending.meta, expiresAt: Date.now() + ttlMs };
+    if (!showCountdown) meta.showCountdown = false;
     const metaCipher = await encryptBlob(master, id, "metadata", te.encode(JSON.stringify(meta)));
     const contentCipher = await encryptBlob(master, id, "content", pending.bytes, pin);
 
@@ -569,8 +584,8 @@ async function doReveal(id: string, master: Uint8Array, meta: ClipMeta, pinRequi
       let init: RequestInit = { method: "POST" };
       if (pinRequired) {
         pin = ($("#reveal-pin") as HTMLInputElement).value.trim();
-        if (!/^\d{4}$/.test(pin)) {
-          $("#precard-info").textContent = "enter the 4-digit PIN";
+        if (!isValidPin(pin)) {
+          $("#precard-info").textContent = "enter the PIN or password for this poof";
           show($("#precard-info"), true);
           return;
         }

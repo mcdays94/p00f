@@ -55,7 +55,7 @@ export const WIRE_FORMAT = {
     algorithm: "HKDF-SHA-256",
     salt: "the clip id, UTF-8 bytes",
     info: { metadata: METADATA_INFO, content: CONTENT_INFO },
-    pin: "for the content role only, a 4-digit PIN is appended to the master key bytes to form the IKM (master || pin); the metadata key is independent of the PIN.",
+    pin: "for the content role only, an optional PIN or password (variable length, 4 to 128 chars) is appended to the master key bytes to form the IKM (master || pin); the metadata key is independent of the PIN.",
   },
   cipher: {
     algorithm: "AES-GCM-256",

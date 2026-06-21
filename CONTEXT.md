@@ -46,9 +46,9 @@ _Avoid_: type, format, mime (reserve "Kind" for this content category).
 A Clip of Kind `url` whose decrypted content is a destination URL (http or https only). The poof Link stands in for that URL: on Reveal the recipient sees the destination and can open it. The server never sees the destination (it is encrypted content like any other Clip), so this masks a real URL behind a Link without shortening it and without weakening Zero-Knowledge. The masked target is the "destination URL"; it is distinct from the Link (the poof share URL).
 _Avoid_: short link, shortener, redirect (the server never resolves the destination).
 
-**PIN**:
-An optional 4-digit numeric second factor for a Clip, shared out-of-band by the sharer. Gates server-side release of the content blob and is folded into the content key. Distinct from the Fragment Key.
-_Avoid_: password, passcode, code (reserve "PIN" for this 4-digit factor).
+**PIN / password**:
+An optional variable-length second factor for a Clip (a PIN or password, 4 to 128 characters, any characters), shared out-of-band by the sharer. Gates server-side release of the content blob and is folded into the content key. Distinct from the Fragment Key. A PIN/password Clip is browser-reveal-only, since the machine path has no Turnstile (ADR-0004/0005/0011). Was originally a 4-digit numeric PIN; widened 2026-06-21.
+_Avoid_: passcode, code (use "PIN" for a short numeric secret and "password" for a longer one; they are the same factor through the same server gate + key fold).
 
 **Owner token**:
 A high-entropy secret returned to the creator once at create time, never part of the Link, that authorizes an early Burn of their own Clip. Distinct from the Fragment Key and the PIN.

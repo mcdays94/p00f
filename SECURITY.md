@@ -13,7 +13,7 @@ p00f is a zero-knowledge, ephemeral clipboard and agent-handoff tool. This docum
 
 - **The recipient sees plaintext.** Anyone you give the Link to (a person, an agent, or the LLM behind that agent) can read the content. That is the point of a handoff. Zero-knowledge protects the content from the storage operator, not from the recipient.
 - **Lose the Link and it is gone.** There is no recovery. The server cannot help; it has no key.
-- **The PIN is access control, not confidentiality.** An optional 4-digit PIN gates server-side release of the content and is folded into the content key. It protects a leaked Link from being revealed, but it is not what keeps the content secret (the Fragment Key is). See `docs/adr/0004-pin-model.md`.
+- **The PIN/password is access control, not confidentiality.** An optional variable-length PIN or password (4 to 128 chars) gates server-side release of the content and is folded into the content key. It protects a leaked Link from being revealed, but it is not what keeps the content secret (the Fragment Key is). See `docs/adr/0004-pin-model.md`.
 - **Coarse size is observable.** Ciphertext length approximates content size, and content over roughly 1 MB is stored in R2. The exact content is never readable, but a size bucket is (`docs/adr/0003-content-model.md`).
 
 ## Reporting a vulnerability

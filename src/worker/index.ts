@@ -1,6 +1,7 @@
 import { ClipDO } from "./clip-do";
 import type { Env } from "./types";
 import { generateClipId, base64urlEncode, generateOwnerToken } from "../shared/crypto";
+import { isValidPin } from "../shared/pin";
 import { buildEnvelope, discoveryDoc, llmsTxt } from "../shared/wire";
 import { SANDBOX_HTML, SANDBOX_CSP } from "../shared/sandbox-doc";
 import { verifyTurnstile } from "./turnstile";
@@ -116,8 +117,10 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
 
   const ttlMs = clampTtl(Number(form.get("ttlMs")));
   const revealBudget = clampBudget(Number(form.get("revealBudget")));
+  // Variable-length PIN or password (ADR-0004): the length floor/cap is the only
+  // server-side shape check; the DO hashes whatever it stores with PBKDF2.
   const pinRaw = form.get("pin");
-  const pin = typeof pinRaw === "string" && /^\d{4}$/.test(pinRaw) ? pinRaw : undefined;
+  const pin = typeof pinRaw === "string" && isValidPin(pinRaw) ? pinRaw : undefined;
 
   // The client generates the id so it can salt the key derivation with it
   // before uploading (ADR-0009). Fall back to a server id if absent (tests).

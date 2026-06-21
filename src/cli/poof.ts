@@ -80,12 +80,17 @@ async function cmdCreate(a) {
     isBinary: isBinary(content),
   });
 
+  // --no-countdown folds ClipMeta.showCountdown=false into the encrypted
+  // metadata (ADR-0014); default leaves the recipient countdown on.
+  const showCountdown = a.flags["no-countdown"] ? false : undefined;
+
   const created = await create(http, BASE, {
     content,
     meta: { kind, filename, mime, size: content.length },
     ttlMs,
     revealBudget,
     pin,
+    showCountdown,
   });
 
   if (a.flags.json) {

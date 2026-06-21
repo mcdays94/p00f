@@ -174,7 +174,10 @@ select:focus { outline: none; border-color: var(--coral); }
 .clip-copy-icon.copied { color: var(--green); border-color: var(--green); opacity: 1; }
 .clip-copy-icon svg { display: block; }
 .secret-mask { font-family: var(--mono); font-size: 16px; letter-spacing: 0.3em; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 0; }
-.secret-toggle { flex-direction: row; align-items: center; gap: 8px; }
+/* Checkbox toggles (secret, show countdown) read as an inline "label box" row.
+   The label.secret-toggle specificity (0,2,1) beats the .options label column
+   rule (0,1,1) so flex-direction:row actually applies. */
+.options label.secret-toggle { flex-direction: row; align-items: center; gap: 8px; }
 .secret-toggle input { accent-color: var(--coral); }
 /* Masked-link suggestion (ADR-0013): a lightweight opt-in near the options
    row. Hidden until the textarea holds a single http(s) URL. */
@@ -189,7 +192,7 @@ select:focus { outline: none; border-color: var(--coral); }
 .actions { display: flex; gap: 8px; margin-top: 12px; }
 .gone { text-align: center; }
 .poof { font-size: 28px; font-weight: 700; color: var(--coral); letter-spacing: -0.02em; margin: 6px 0; }
-.pin-input { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--mono); font-size: 14px; letter-spacing: 0.2em; width: 9em; }
+.pin-input { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--mono); font-size: 14px; letter-spacing: 0.1em; width: 12em; }
 .pin-input:focus { outline: none; border-color: var(--coral); }
 #pin-entry { margin: 14px 0; display: flex; flex-direction: column; gap: 10px; }
 

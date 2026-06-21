@@ -94,6 +94,45 @@ describe("@p00f/core", () => {
     expect(td.decode(ok.content as Uint8Array)).toBe("pin me");
   });
 
+  it("round-trips a variable-length password and gates it server-side (ADR-0004)", async () => {
+    const { http } = capturing();
+    const password = "correct-horse-battery-staple";
+    const created = await create(http, base, {
+      content: te.encode("classified"),
+      meta: { kind: "secret", size: 10 },
+      revealBudget: 5,
+      pin: password,
+    });
+    // The Worker now treats a non-4-digit secret as a real PIN: it stores the
+    // hash, so the server reports the clip as PIN-gated (not silently dropped).
+    const i = await info(http, created.link);
+    expect(i.pinRequired).toBe(true);
+    const wrong = await read(http, created.link, { pin: "correct-horse" });
+    expect(wrong.ok).toBe(false);
+    const ok = await read(http, created.link, { pin: password });
+    expect(ok.ok).toBe(true);
+    expect(td.decode(ok.content as Uint8Array)).toBe("classified");
+  });
+
+  it("folds showCountdown=false into the encrypted metadata, default stays on (ADR-0014)", async () => {
+    const { http } = capturing();
+    const onClip = await create(http, base, {
+      content: te.encode("a"),
+      meta: { kind: "text", size: 1 },
+      revealBudget: 1,
+    });
+    // Default on: no field is written, so the recipient defaults to showing it.
+    expect((await info(http, onClip.link)).meta?.showCountdown).toBeUndefined();
+
+    const offClip = await create(http, base, {
+      content: te.encode("b"),
+      meta: { kind: "text", size: 1 },
+      revealBudget: 1,
+      showCountdown: false,
+    });
+    expect((await info(http, offClip.link)).meta?.showCountdown).toBe(false);
+  });
+
   it("burns with the owner token so a later read is gone", async () => {
     const { http } = capturing();
     const created = await create(http, base, {

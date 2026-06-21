@@ -35,6 +35,10 @@ export interface CreateInput {
   revealBudget?: number;
   pin?: string;
   turnstile?: string;
+  // Creator preference for the recipient countdown (ADR-0014), default on.
+  // Pass false to fold ClipMeta.showCountdown=false into the encrypted metadata
+  // (e.g. the CLI --no-countdown flag). Omit to leave the default.
+  showCountdown?: boolean;
 }
 
 export interface CreatedClip {
@@ -50,6 +54,9 @@ export async function create(http: HttpLike, baseUrl: string, input: CreateInput
   // recipient can render a private countdown. Default mirrors the server's TTL.
   const ttlMs = input.ttlMs ?? 5 * 60_000;
   const meta: ClipMeta = { ...input.meta, expiresAt: input.meta.expiresAt ?? Date.now() + ttlMs };
+  // Only stamp showCountdown when explicitly disabled; the default (on) needs no
+  // field, keeping the encrypted metadata minimal (ADR-0014, reveal checks !== false).
+  if (input.showCountdown === false) meta.showCountdown = false;
   const metaCipher = await encryptBlob(master, id, "metadata", te.encode(JSON.stringify(meta)));
   const contentCipher = await encryptBlob(master, id, "content", input.content, input.pin);
   const { id: serverId, ownerToken } = await createClip(http, baseUrl, {

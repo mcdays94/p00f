@@ -60,11 +60,14 @@
         <details class="advanced more-options">
           <summary>more options</summary>
           <div class="options">
-            <label>PIN (optional)
-              <input id="pin" class="pin-input" type="text" inputmode="numeric" maxlength="4" placeholder="4 digits" data-testid="pin" />
+            <label>PIN or password (optional)
+              <input id="pin" class="pin-input" type="text" maxlength="128" autocomplete="off" placeholder="PIN or password" data-testid="pin" />
             </label>
             <label class="secret-toggle">secret
               <input id="secret" type="checkbox" data-testid="secret" />
+            </label>
+            <label class="secret-toggle">show countdown
+              <input id="show-countdown" type="checkbox" data-testid="show-countdown" checked />
             </label>
           </div>
         </details>
@@ -105,7 +108,7 @@
         <p id="pc-reveals" class="muted" data-testid="pc-reveals"></p>
         <p class="honesty">Revealing may consume the only copy. The metadata above was decrypted in your browser without spending a reveal.</p>
         <div id="pin-entry" hidden>
-          <input id="reveal-pin" class="pin-input" type="text" inputmode="numeric" maxlength="4" placeholder="enter 4-digit PIN" data-testid="reveal-pin" />
+          <input id="reveal-pin" class="pin-input" type="text" maxlength="128" autocomplete="off" placeholder="enter PIN or password" data-testid="reveal-pin" />
           <div id="reveal-ts" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark"></div>
         </div>
         <button id="reveal-btn" class="btn primary" data-testid="reveal-btn">Reveal</button>
