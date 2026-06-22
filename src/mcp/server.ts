@@ -10,8 +10,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { poofCreate, poofRead, poofInfo, poofBurn } from "./tools";
 import { ttlToMs, readsToBudget } from "../cli/args";
+import { resolveBase } from "../shared/base";
 
-const BASE = process.env.POOF_BASE || process.env.P00F_BASE || "https://poof.localhost";
+const BASE = resolveBase(process.env);
 const http = (u, init) => fetch(u, init);
 
 function text(obj) {
