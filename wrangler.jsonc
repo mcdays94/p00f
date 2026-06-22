@@ -1,7 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "poof",
-  "account_id": "9993650612175c36066a397a94466033",
+  // account_id is intentionally not committed. CI (Workers Builds) is already
+  // scoped to the account; for a manual deploy, set CLOUDFLARE_ACCOUNT_ID in the
+  // environment (e.g. CLOUDFLARE_ACCOUNT_ID=<id> npx wrangler deploy).
   "main": "src/worker/index.ts",
   "compatibility_date": "2025-05-01",
   "observability": { "enabled": true },

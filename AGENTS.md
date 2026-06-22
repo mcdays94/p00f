@@ -4,7 +4,7 @@ Zero-knowledge, ephemeral clipboard sharing on Cloudflare Workers + Durable Obje
 
 ## Project status
 
-Deployed and live at `https://p00f.me` on the `mdias.info` Cloudflare account (account_id `9993650612175c36066a397a94466033`). Code is at `github.com/mcdays94/p00f` (PRIVATE). The zero-knowledge engine is published as `@p00f/core` on npm. Personal identity throughout (`amtccdias@gmail.com` / `mcdays94`). CI/CD is not wired yet, so deploys are manual. Standing rule: never push to the remote or deploy (`wrangler deploy`, `wrangler secret put`) without an explicit ask.
+Deployed and live at `https://p00f.me` on the `mdias.info` Cloudflare account (the account_id is not committed; set `CLOUDFLARE_ACCOUNT_ID` in the environment for a manual deploy). Code is at `github.com/mcdays94/p00f` (public). The zero-knowledge engine is published as `@p00f/core` and the CLI as `@p00f/cli` on npm. Personal identity throughout (`amtccdias@gmail.com` / `mcdays94`). CI/CD is live via Cloudflare Workers Builds: a push to `main` runs `npm run build:client` then `npx wrangler deploy`. Standing rule: never push to the remote or deploy (`wrangler deploy`, `wrangler secret put`) without an explicit ask.
 
 ## Agent skills
 

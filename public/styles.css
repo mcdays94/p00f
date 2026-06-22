@@ -238,17 +238,11 @@ select:focus { outline: none; border-color: var(--coral); }
 .cd-text { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
 
 .site-footer { margin-top: 40px; text-align: center; font-size: 12px; }
-/* Footer GitHub mark is a "coming soon" indicator, not a link: the repo is
-   still private (GH #4), so the icon must not navigate to a 404. A corner
-   "soon" badge overlays the glyph; a hover/focus tooltip and the aria-label
-   spell it out for everyone else. */
-.site-footer .gh-soon { position: relative; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); padding: 6px; border-radius: 6px; cursor: default; }
-.site-footer .gh-soon svg { display: block; opacity: 0.65; transition: opacity 0.15s; }
-.site-footer .gh-soon:hover svg, .site-footer .gh-soon:focus-visible svg { opacity: 1; }
-.site-footer .gh-soon:focus-visible { outline: none; }
-.site-footer .soon-badge { position: absolute; top: -5px; right: -14px; font-family: var(--mono); font-size: 8px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--coral); background: var(--surface); border: 1px solid var(--coral-dim); border-radius: 999px; padding: 1px 5px; line-height: 1.5; pointer-events: none; }
-.site-footer .gh-soon::after { content: "coming soon"; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
-.site-footer .gh-soon:hover::after, .site-footer .gh-soon:focus-visible::after { opacity: 1; }
+/* Footer GitHub mark links to the public source repo. */
+.site-footer .gh-link { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); padding: 6px; border-radius: 6px; }
+.site-footer .gh-link svg { display: block; opacity: 0.65; transition: opacity 0.15s; }
+.site-footer .gh-link:hover svg, .site-footer .gh-link:focus-visible svg { opacity: 1; }
+.site-footer .gh-link:focus-visible { outline: none; }
 
 /* ---- Mobile (create + reveal). Tighten chrome, give controls full-width touch
    targets, stack the options so the Turnstile widget and selects never overflow
