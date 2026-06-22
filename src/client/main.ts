@@ -88,6 +88,13 @@ const CREATE_TAGLINES = [
   "Here today. Poof tomorrow.",
   "Send it before it forgets itself.",
   "Your secret travels light, and not for long.",
+  "A secret with an expiry date.",
+  "Wrapped tight, set to disappear.",
+  "Say it once, in ciphertext.",
+  "A whisper with a timer.",
+  "Delivered in cipher, gone on cue.",
+  "Yours to share, and only for a while.",
+  "It travels light and never lingers.",
 ];
 
 // Gone card: the poof has already expired or been burned. Past-tense, "as designed".
@@ -99,6 +106,13 @@ const GONE_TAGLINES = [
   "Built to be forgotten. Done.",
   "A one-way trip to oblivion, completed.",
   "Vanished without a trace.",
+  "Burned on schedule. Nothing left.",
+  "The link did its job and forgot the rest.",
+  "Expired, erased, end of story.",
+  "It self-destructed. The poof I mean, not your computer... I hope",
+  "No copies, no traces, no second look.",
+  "Whatever it was, it isn't anymore.",
+  "Unrecoverable, by design.",
 ];
 
 // Revealed panel: you are looking at the content now, and it is on its way out.
@@ -110,6 +124,11 @@ const REVEAL_TAGLINES = [
   "Here for a moment, then never again.",
   "One look is all you get.",
   "Catch it now. It's already leaving.",
+  "This is the only showing.",
+  "The timer is running; read on.",
+  "Open once, remember well.",
+  "It's here, but not for long.",
+  "Memorize what matters. It won't repeat.",
 ];
 
 function setTagline(selector: string, pool: readonly string[]): void {
