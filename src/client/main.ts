@@ -75,21 +75,44 @@ const SHARE_BLURBS = [
   "Top secret. This one actually self-destructs.",
 ];
 
-// Brand taglines for the "already vanished" moments: rotated at random on the
-// "// your link" result panel (once a poof is created) and on the gone card.
+// Brand taglines, split by moment so the copy fits the screen it lands on.
 // House style: no em-dashes.
-const TAGLINES = [
-  "Shared in confidence, gone into oblivion.",
-  "A one-way trip to oblivion.",
-  "Built to be forgotten.",
+
+// Create result panel ("// your link"): the poof exists and is primed to vanish.
+// Forward-looking: you are about to hand off something that self-destructs.
+const CREATE_TAGLINES = [
+  "Shared in confidence, gone in a poof.",
+  "One link. One life. Spend it wisely.",
+  "Hand it over. It won't stick around.",
+  "Encrypted now, forgotten soon.",
+  "Here today. Poof tomorrow.",
+  "Send it before it forgets itself.",
+  "Your secret travels light, and not for long.",
 ];
 
-// Shown on the revealed panel: you are looking at the content now, and it is on
-// its way out. Kept separate from TAGLINES because it only fits a live reveal,
-// not a poof that is already gone.
-const REVEAL_TAGLINES = ["Now you see it. Soon you won't."];
+// Gone card: the poof has already expired or been burned. Past-tense, "as designed".
+const GONE_TAGLINES = [
+  "Gone into oblivion, as promised.",
+  "Poof. Like it was never here.",
+  "Nothing to see. That was the point.",
+  "It kept the secret by forgetting it.",
+  "Built to be forgotten. Done.",
+  "A one-way trip to oblivion, completed.",
+  "Vanished without a trace.",
+];
 
-function setTagline(selector: string, pool: readonly string[] = TAGLINES): void {
+// Revealed panel: you are looking at the content now, and it is on its way out.
+// Kept separate because these only fit a live reveal, not a poof already gone.
+const REVEAL_TAGLINES = [
+  "Now you see it. Soon you won't.",
+  "Read it while it lasts.",
+  "Look fast. This won't wait.",
+  "Here for a moment, then never again.",
+  "One look is all you get.",
+  "Catch it now. It's already leaving.",
+];
+
+function setTagline(selector: string, pool: readonly string[]): void {
   const el = document.querySelector(selector);
   if (el) el.textContent = pool[(Math.random() * pool.length) | 0];
 }
@@ -711,7 +734,7 @@ async function doCreate() {
     await minPoof;
     btnCtl?.stopRing();
     show($("#composer"), false);
-    setTagline("#result-tagline");
+    setTagline("#result-tagline", CREATE_TAGLINES);
     show($("#result"), true);
   } catch (err) {
     btnCtl?.stopRing();
@@ -727,7 +750,7 @@ async function doCreate() {
 const sessionCache = new Map<string, Uint8Array>();
 
 function showGone() {
-  setTagline("#gone-tagline");
+  setTagline("#gone-tagline", GONE_TAGLINES);
   show($("#precard"), false);
   show($("#revealed"), false);
   show($("#gone"), true);
