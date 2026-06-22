@@ -113,7 +113,7 @@ npx @p00f/cli info https://p00f.me/c/ID#KEY      # non-consuming
 npx @p00f/cli burn https://p00f.me/c/ID#KEY --token OWNER_TOKEN
 ```
 
-stdout is the link only, so `LINK=$(npx @p00f/cli report.md)` composes cleanly. The owner token needed to burn early goes to stderr, or use `--json`. Flags include `--ttl`, `--reads`, `--pin`, `--require-turnstile`, `--no-countdown`, and `--out FILE`. Set `POOF_BASE` to point it at another deployment.
+stdout is the link only, so `LINK=$(npx @p00f/cli report.md)` composes cleanly. The owner token needed to burn early goes to stderr, or use `--json`. Flags include `--ttl`, `--reads`, `--pin`, `--require-turnstile`, `--reveal-anchored`, `--no-countdown`, and `--out FILE`. Set `POOF_BASE` to point it at another deployment.
 
 Agents that want the library directly can `npm install @p00f/core` and call it; the hosted API only ever relays ciphertext, so a functional read needs the caller-side engine (see [ADR-0010](docs/adr/0010-agent-machine-integration.md)).
 
@@ -121,6 +121,7 @@ Agents that want the library directly can `npm install @p00f/core` and call it; 
 
 - **Burns after** a TTL: a quick preset or any custom value, from 1 minute up to 30 days.
 - **Or after** N reveals: a preset or any custom count up to 100, or unlimited (within the TTL). The counter is atomic in the Durable Object, so concurrent reveals cannot overspend it.
+- **Start the timer on first reveal** (optional, default off): the TTL clock starts when the poof is first revealed instead of at creation, for a true self-destruct. The link waits (up to the 30-day cap) until first revealed, then burns the TTL later. The deadline is disclosed only in the reveal response, never to a link-holder who has not yet revealed ([ADR-0017](docs/adr/0017-reveal-anchored-ttl.md)).
 - **PIN or password** (4 to 128 characters), folded into the key derivation. A wrong-PIN lockout (5 attempts) lives in the Durable Object.
 - **Reveal captcha** (optional, default off): require a human to pass a challenge before revealing. This is what makes a poof browser-only; leave it off for agent-revealable poofs.
 - **Countdown**: the reveal page shows a live fuse and best-effort auto-clears when the deadline passes. This is honest UX, not confidentiality (an already-revealed poof may have been copied).
