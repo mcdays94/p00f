@@ -101,6 +101,9 @@
             <label class="secret-toggle">show countdown
               <input id="show-countdown" type="checkbox" data-testid="show-countdown" checked />
             </label>
+            <label class="secret-toggle">start the timer on first reveal
+              <input id="reveal-anchored" type="checkbox" data-testid="reveal-anchored" />
+            </label>
             <label class="secret-toggle">require captcha to reveal
               <input id="require-turnstile" type="checkbox" data-testid="require-turnstile" />
             </label>
@@ -108,6 +111,7 @@
               <input id="allow-viewer-delete" type="checkbox" data-testid="allow-viewer-delete" />
             </label>
           </div>
+          <p class="opt-note">With "start the timer on first reveal" on, the "burns after" timer does not start until the poof is first revealed. Until then the link just waits (up to 30 days), then it burns that long after the first reveal. A true self-destruct. Off by default.</p>
           <p class="opt-note">Leave the captcha off so an agent or script can reveal this poof from the link. Turn it on to require a human (browser) to open it.</p>
           <p class="opt-note">With "let the viewer delete it" on, anyone you share the link with can burn the poof for everyone once they open it. Off by default.</p>
           <div class="prefs-save">
@@ -159,6 +163,7 @@
         <p class="panel-kicker">// you have a poof</p>
         <div class="pc-row"><span id="pc-kind" class="badge" data-testid="pc-kind"></span><span id="pc-detail" class="muted" data-testid="pc-detail"></span></div>
         <p id="pc-reveals" class="muted" data-testid="pc-reveals"></p>
+        <p id="pc-anchored" class="muted" data-testid="pc-anchored" hidden></p>
         <p class="honesty">Revealing may consume the only copy. The metadata above was decrypted in your browser without spending a reveal.</p>
         <div id="pin-entry" hidden>
           <input id="reveal-pin" class="pin-input" type="text" maxlength="128" autocomplete="off" placeholder="enter PIN or password" data-testid="reveal-pin" />

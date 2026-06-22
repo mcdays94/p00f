@@ -11,7 +11,7 @@ import { buildLink } from "../shared/link";
 import type { ClipMeta } from "../shared/core";
 import { isValidPin, PIN_MIN_LEN, PIN_MAX_LEN } from "../shared/pin";
 import { MAX_CLIP_BYTES, formatBytes, clampTtlMs, clampRevealBudget } from "../shared/limits";
-import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, countdownFraction, type SandboxMessage } from "./render";
+import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, formatDuration, countdownFraction, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -257,6 +257,7 @@ interface Prefs {
   showCountdown?: boolean;
   requireTurnstile?: boolean;
   allowViewerDelete?: boolean;
+  revealAnchored?: boolean;
 }
 
 function readPrefs(): Prefs | null {
@@ -278,6 +279,7 @@ function currentPrefs(): Prefs {
     showCountdown: ($("#show-countdown") as HTMLInputElement).checked,
     requireTurnstile: ($("#require-turnstile") as HTMLInputElement).checked,
     allowViewerDelete: ($("#allow-viewer-delete") as HTMLInputElement).checked,
+    revealAnchored: ($("#reveal-anchored") as HTMLInputElement).checked,
   };
 }
 
@@ -295,6 +297,7 @@ function applyPrefs(p: Prefs) {
   if (typeof p.showCountdown === "boolean") ($("#show-countdown") as HTMLInputElement).checked = p.showCountdown;
   if (typeof p.requireTurnstile === "boolean") ($("#require-turnstile") as HTMLInputElement).checked = p.requireTurnstile;
   if (typeof p.allowViewerDelete === "boolean") ($("#allow-viewer-delete") as HTMLInputElement).checked = p.allowViewerDelete;
+  if (typeof p.revealAnchored === "boolean") ($("#reveal-anchored") as HTMLInputElement).checked = p.revealAnchored;
   syncCustomFields();
 }
 
@@ -320,7 +323,7 @@ function setupPrefs() {
       /* storage blocked or full: persistence is best-effort */
     }
   };
-  ["#ttl", "#budget", "#ttl-num", "#ttl-unit", "#budget-num", "#show-countdown", "#require-turnstile", "#allow-viewer-delete"].forEach((sel) =>
+  ["#ttl", "#budget", "#ttl-num", "#ttl-unit", "#budget-num", "#show-countdown", "#require-turnstile", "#allow-viewer-delete", "#reveal-anchored"].forEach((sel) =>
     $(sel)?.addEventListener("change", persistIfOn),
   );
   remember.addEventListener("change", () => {
@@ -340,6 +343,7 @@ function setupPrefs() {
     ($("#show-countdown") as HTMLInputElement).checked = true;
     ($("#require-turnstile") as HTMLInputElement).checked = false;
     ($("#allow-viewer-delete") as HTMLInputElement).checked = false;
+    ($("#reveal-anchored") as HTMLInputElement).checked = false;
     remember.checked = false;
     try {
       localStorage.removeItem(PREFS_KEY);
@@ -721,6 +725,10 @@ async function doCreate() {
   // Creator's opt-in to let any link-holder burn the poof after revealing
   // (ADR-0016), default off.
   const allowViewerDelete = ($("#allow-viewer-delete") as HTMLInputElement | null)?.checked ?? false;
+  // Creator's opt-in to start the ttl clock at the first reveal (ADR-0017),
+  // default off. When on, the poof waits under the unrevealed cap until first
+  // revealed, then burns ttlMs later.
+  const revealAnchored = ($("#reveal-anchored") as HTMLInputElement | null)?.checked ?? false;
 
   btn.disabled = true;
   show($("#create-error"), false);
@@ -731,11 +739,15 @@ async function doCreate() {
     const master = generateMasterKey();
     const id = generateClipId();
 
-    // Stamp the expiry deadline into the encrypted metadata (ADR-0014) so the
-    // recipient can render a private countdown; the server never sees it. The
-    // creator's show/hide-countdown choice rides along (default on, so the
-    // flag is only written when off, keeping the metadata minimal).
-    const meta: ClipMeta = { ...pending.meta, expiresAt: Date.now() + ttlMs };
+    // ADR-0017: a reveal-anchored poof has no deadline at create, so store the
+    // duration + flag for the recipient (the absolute deadline arrives in the
+    // reveal response). Otherwise stamp the absolute expiry into the encrypted
+    // metadata (ADR-0014) so the recipient can render a private countdown; the
+    // server never sees it. The show/hide-countdown choice rides along either way
+    // (default on, so the flag is only written when off, keeping metadata minimal).
+    const meta: ClipMeta = revealAnchored
+      ? { ...pending.meta, revealAnchored: true, ttlMs }
+      : { ...pending.meta, expiresAt: Date.now() + ttlMs };
     if (!showCountdown) meta.showCountdown = false;
     const metaCipher = await encryptBlob(master, id, "metadata", te.encode(JSON.stringify(meta)));
     const contentCipher = await encryptBlob(master, id, "content", pending.bytes, pin);
@@ -748,6 +760,7 @@ async function doCreate() {
     if (pin) fd.set("pin", pin);
     if (requireTurnstile) fd.set("requireTurnstile", "1");
     if (allowViewerDelete) fd.set("allowViewerDelete", "1");
+    if (revealAnchored) fd.set("revealAnchored", "1");
     fd.set("meta", new Blob([metaCipher]));
     fd.set("content", new Blob([contentCipher]));
 
@@ -933,8 +946,17 @@ async function initReveal(id: string, keyStr: string) {
   show($("#precard"), true);
 
   // Countdown + best-effort auto-clear once we know the (encrypted) deadline.
+  // A creation-anchored poof has it now; a reveal-anchored poof does not until
+  // the reveal response arrives (handled in doReveal), so this is skipped here.
   if (typeof meta.expiresAt === "number") {
     startCountdown(id, meta.expiresAt, meta.showCountdown !== false);
+  }
+  // ADR-0017: tell the recipient a reveal-anchored poof's timer has not started
+  // yet, and how long it runs once they reveal. No ticking fuse pre-reveal.
+  if (meta.revealAnchored && typeof meta.ttlMs === "number") {
+    const hint = $("#pc-anchored");
+    hint.textContent = `This poof's timer starts when you reveal it, then it self-destructs ${formatDuration(meta.ttlMs)} later.`;
+    show(hint, true);
   }
 
   // Set up the reveal poof-button now that the precard is laid out, so its canvas
@@ -975,6 +997,10 @@ async function doReveal(
   // Let the poof sweep at least once before the content materializes.
   const minPoof = new Promise<void>((r) => setTimeout(r, 560));
 
+  // ADR-0017: a reveal-anchored poof's authoritative deadline is disclosed only
+  // in this reveal's response header; captured below and used to start the fuse.
+  let revealExpiresAt: number | undefined;
+
   // Recoverable failure: stop the ring, restore the idle button, surface a note.
   const recover = (msg: string) => {
     revealCtl?.stopRing();
@@ -1005,6 +1031,8 @@ async function doReveal(
         );
       }
       if (!res.ok) return recover("reveal failed");
+      const exp = res.headers.get("x-poof-expires-at");
+      if (exp && Number.isFinite(Number(exp))) revealExpiresAt = Number(exp);
       const cipher = new Uint8Array(await res.arrayBuffer());
       bytes = await decryptBlob(master, id, "content", cipher, pin);
       sessionCache.set(id, bytes);
@@ -1021,6 +1049,13 @@ async function doReveal(
     if (allowViewerDelete) setupViewerDelete(id);
     revealed.classList.add("materialize");
     show(revealed, true);
+    // ADR-0017: a reveal-anchored poof's deadline is known only now (from the
+    // reveal response). Start the post-reveal countdown from it; fall back to
+    // now + ttlMs if the header was stripped or the bytes came from cache.
+    if (meta.revealAnchored) {
+      const dl = revealExpiresAt ?? (typeof meta.ttlMs === "number" ? Date.now() + meta.ttlMs : undefined);
+      if (typeof dl === "number") startCountdown(id, dl, meta.showCountdown !== false);
+    }
   } catch {
     recover("decryption failed");
   }

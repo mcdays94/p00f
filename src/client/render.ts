@@ -131,6 +131,27 @@ export function formatRemaining(ms: number): string {
   return `${sec}s`;
 }
 
+// Coarse human duration ("5 minutes", "1 hour", "2 days") for the reveal-anchored
+// precard hint (ADR-0017): "this poof's timer starts when you reveal it, then X".
+// Picks the largest unit at or below the duration and rounds, so the common TTL
+// presets read cleanly and off-grid customs stay approximate. Pure, unit-tested.
+export function formatDuration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const units: [string, number][] = [
+    ["day", 86_400],
+    ["hour", 3_600],
+    ["minute", 60],
+    ["second", 1],
+  ];
+  for (const [name, secs] of units) {
+    if (s >= secs) {
+      const n = Math.round(s / secs);
+      return `${n} ${name}${n === 1 ? "" : "s"}`;
+    }
+  }
+  return "0 seconds";
+}
+
 // Fraction (0..1) of the viewing window still remaining, for the depleting bar.
 // The window is measured from when the page opened (openedAt), not the original
 // TTL: the countdown needs only the time left, never the total duration

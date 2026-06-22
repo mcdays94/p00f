@@ -1,10 +1,26 @@
 import { describe, it, expect } from "vitest";
-import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, countdownFraction } from "../src/client/render";
+import { decideRender, looksUtf8, escapeHtml, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, countdownFraction, formatDuration } from "../src/client/render";
 import { SANDBOX_HTML, SANDBOX_CSP } from "../src/shared/sandbox-doc";
 import { tokenize, detectLanguage, LANGS } from "../src/shared/highlight";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
+
+// ADR-0017: the precard hint for a reveal-anchored poof ("timer starts when you
+// reveal it, then X") needs a coarse human duration of the post-reveal window.
+describe("formatDuration", () => {
+  it("renders the common TTL presets cleanly with singular/plural units", () => {
+    expect(formatDuration(300_000)).toBe("5 minutes");
+    expect(formatDuration(3_600_000)).toBe("1 hour");
+    expect(formatDuration(86_400_000)).toBe("1 day");
+    expect(formatDuration(604_800_000)).toBe("7 days");
+    expect(formatDuration(60_000)).toBe("1 minute");
+  });
+  it("picks the largest sensible unit and rounds for off-grid values", () => {
+    expect(formatDuration(90_000)).toBe("2 minutes"); // 90s rounds to 2 minutes
+    expect(formatDuration(5_400_000)).toBe("2 hours"); // 90 minutes rounds to 2 hours
+  });
+});
 
 describe("POOF-14: hostile-content render decisions (ADR-0012)", () => {
   it("dispatches text to text-mode and code to code-mode in the sandbox", () => {
