@@ -2,7 +2,7 @@
 
 **Status:** accepted (extends ADR-0005)
 
-ADR-0005 makes Turnstile mandatory, but Turnstile assumes a human clicking a managed widget. The CLI, Code Mode agents, CI jobs, and raw API callers have neither a human nor a browser, so they cannot solve it. This ADR defines abuse control for the machine path without a human, without reintroducing PII (ADR-0007), and without breaking free self-hosting (ADR-0005). The model is one identity-free rate-limit floor for everyone, raised by either a human proof (Turnstile, on the browser path) or, later, a machine proof (an optional PII-free bearer key). Anonymous machine creation stays possible at the floor.
+ADR-0005 makes Turnstile mandatory, but Turnstile assumes a human clicking a managed widget. The CLI, CI jobs, and raw API callers have neither a human nor a browser, so they cannot solve it. This ADR defines abuse control for the machine path without a human, without reintroducing PII (ADR-0007), and without breaking free self-hosting (ADR-0005). The model is one identity-free rate-limit floor for everyone, raised by either a human proof (Turnstile, on the browser path) or, later, a machine proof (an optional PII-free bearer key). Anonymous machine creation stays possible at the floor.
 
 ## Decisions
 

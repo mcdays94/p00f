@@ -1,6 +1,6 @@
 # PRD 0002 - p00f v2 (agent-native: CLI, content negotiation)
 
-p00f v1 (PRD 0001) is a finished zero-knowledge, ephemeral clipboard for a human in a browser. v2 extends it along the agent-native axis: humans and agents hand off transient context, secrets, prompts, and intermediate results by URL, from the CLI and Code Mode agents, while keeping the zero-knowledge spine of ADR-0001. This PRD does not restate the ADRs; it references them. Brand and domain are `p00f.me` (via the Cloudflare Registrar); the repo and code identifiers stay `poof` and `clip`.
+p00f v1 (PRD 0001) is a finished zero-knowledge, ephemeral clipboard for a human in a browser. v2 extends it along the agent-native axis: humans and agents hand off transient context, secrets, prompts, and intermediate results by URL, from the CLI, while keeping the zero-knowledge spine of ADR-0001. This PRD does not restate the ADRs; it references them. Brand and domain are `p00f.me` (via the Cloudflare Registrar); the repo and code identifiers stay `poof` and `clip`.
 
 ## Why
 
@@ -9,7 +9,7 @@ v1 competes in the crowded pastebin and secret-sharing space. The more different
 ## Principles
 
 - **Zero-knowledge everywhere** (ADR-0001, ADR-0010): every surface encrypts and decrypts caller-side; the hosted API holds only ciphertext.
-- **One core, many shells** (ADR-0010): a single `@p00f/core` engine; the web app, CLI, and Code Mode module are thin wrappers.
+- **One core, many shells** (ADR-0010): a single `@p00f/core` engine; the web app and CLI are thin wrappers.
 - **Anonymous and instant** (ADR-0007, ADR-0011): no signup to create from a browser, the CLI, or an agent.
 - **Ephemeral by default** (ADR-0002).
 - **Self-hostable on free** (ADR-0005, ADR-0011): the abuse floor ships in-repo via the `ratelimit` binding.
@@ -28,10 +28,9 @@ v1 competes in the crowded pastebin and secret-sharing space. The more different
 
 - Server-side search, embeddings, summaries, keywords, semantic metadata, and format conversion (incompatible with zero-knowledge, ADR-0001).
 - Accounts, OAuth, and human login (ADR-0007). The optional PII-free key (ADR-0011) is designed-for but not built in v2.
-- A hosted Code Mode server that decrypts (ADR-0010).
+- A hosted server that decrypts (ADR-0010).
 - Webhooks, and server-side `list_recent` or `search_objects` (not zero-knowledge compatible).
 - Paid tiers and monetization (free for now).
-- Packaging and distributing the Code Mode injectable module (design-compatible since it is just the core; deferred unless trivial).
 
 ## Deep modules (and test coverage)
 
@@ -76,4 +75,3 @@ Tracer-bullet vertical slices, tracked in `poof-issues.html`:
 4. `ratelimit` binding floor on create and reveal; Turnstile stays browser-only (POOF-15)
 5. `poof` CLI (stateless): create, get, info, burn, plus flags (POOF-16)
 6. OSS readiness: LICENSE (MIT), SECURITY.md, README, Turnstile secret moved to `wrangler secret` (POOF-18)
-7. Stretch: Code Mode injectable module packaging (POOF-19)
