@@ -14,7 +14,6 @@ Encrypt something, get a link that self-destructs, hand it off. The server only 
 <p align="center">
   <a href="https://www.npmjs.com/package/@p00f/core"><img alt="@p00f/core on npm" src="https://img.shields.io/npm/v/@p00f/core?style=flat-square&color=FF6363&label=%40p00f%2Fcore" /></a>
   <a href="LICENSE"><img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-FF6363?style=flat-square" /></a>
-  <img alt="built on Cloudflare Workers" src="https://img.shields.io/badge/built%20on-Cloudflare%20Workers-FF6363?style=flat-square" />
 </p>
 
 ---
