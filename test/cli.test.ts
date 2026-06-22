@@ -25,6 +25,14 @@ describe("cli args", () => {
     expect(a.flags.kind).toBe("secret");
   });
 
+  it("treats --reveal-anchored as a boolean flag, not consuming the next arg (#27)", () => {
+    // It is in BOOLEAN_FLAGS, so the following positional (the file) must not be
+    // swallowed as its value.
+    const a = parseArgs(["secrets.env", "--reveal-anchored"]);
+    expect(a.flags["reveal-anchored"]).toBe(true);
+    expect(a.positional).toEqual(["secrets.env"]);
+  });
+
   it("treats a bare --pin as boolean true (prompt), and --pin 1234 as a value", () => {
     expect(parseArgs(["f", "--pin"]).flags.pin).toBe(true);
     expect(parseArgs(["f", "--pin", "1234"]).flags.pin).toBe("1234");
