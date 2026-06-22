@@ -6,7 +6,7 @@
   --text: #ededed;
   --muted: #8a8a92;
   --line: #2a2a2e;
-  --coral: #ff6363;
+  --coral: #ff5959;
   --coral-dim: #c94f4f;
   --green: #3ad29f;
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -115,7 +115,7 @@ select:focus { outline: none; border-color: var(--coral); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.primary { background: var(--coral); border-color: var(--coral); color: #1a0e0e; font-weight: 600; }
-.btn.primary:hover { background: #ff7a7a; }
+.btn.primary:hover { background: #ff7070; }
 .btn.ghost { background: transparent; }
 
 /* Composite create button (V6): a centerpiece that idles as a drifting glyph

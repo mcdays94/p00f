@@ -592,7 +592,7 @@ function setupPoofButton(
           const d = Math.hypot(x - cx, (y - cy) * aspect);
           const k = Math.round(F - d);
           if (k >= 0 && k < pal.length) {
-            ctx.fillStyle = k === 0 ? "#ff6363" : `rgba(255,99,99,${Math.max(0.15, 0.8 - k * 0.16)})`;
+            ctx.fillStyle = k === 0 ? "#ff5959" : `rgba(255,89,89,${Math.max(0.15, 0.8 - k * 0.16)})`;
             ctx.fillText(pal[k], (x + 0.5) * cw, (y + 0.5) * lh);
           }
         }

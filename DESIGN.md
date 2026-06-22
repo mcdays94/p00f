@@ -1,9 +1,9 @@
 ---
 name: Poof
 colors:
-  primary: "#ff6363"
+  primary: "#ff5959"
   primary-dim: "#c94f4f"
-  primary-hover: "#ff7a7a"
+  primary-hover: "#ff7070"
   bg: "#0a0a0b"
   surface: "#141416"
   surface-2: "#1b1b1e"
