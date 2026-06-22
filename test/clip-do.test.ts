@@ -69,6 +69,114 @@ describe("ClipDO lifecycle", () => {
     expect(await s.getMeta()).toEqual({ exists: false });
   });
 
+  // ADR-0017: a reveal-anchored clip has no deadline until first reveal, so even a
+  // ttl that would expire a normal clip immediately does not expire it at create;
+  // it waits under the unrevealed cap. (Same negative-ttl trick as above, opposite
+  // outcome.)
+  it("reveal-anchored: an unrevealed clip is not expired by its ttl", async () => {
+    const s = stub("anchor-create");
+    await s.create({
+      metadata: b(1),
+      content: b(2),
+      ttlMs: -1000,
+      revealBudget: 5,
+      size: 1,
+      revealAnchored: true,
+    });
+
+    expect((await s.getMeta()).exists).toBe(true);
+  });
+
+  // ADR-0017: the first Reveal arms the ttl clock. Budget 2 so budget exhaustion
+  // does not burn on the first reveal; a negative ttl means arming sets expires_at
+  // into the past, so the 2nd reveal is gone-by-ttl even though budget remained.
+  it("reveal-anchored: the first reveal arms the ttl clock", async () => {
+    const s = stub("anchor-arm");
+    await s.create({
+      metadata: b(1),
+      content: b(2),
+      ttlMs: -1000,
+      revealBudget: 2,
+      size: 1,
+      revealAnchored: true,
+    });
+
+    expect((await s.reveal()).ok).toBe(true);
+    expect(await s.getMeta()).toEqual({ exists: false });
+    expect(await s.reveal()).toEqual({ ok: false, reason: "gone" });
+  });
+
+  // ADR-0017: reveal() returns the effective deadline so the Worker can disclose
+  // it (only on success) via the x-poof-expires-at header. For an anchored clip
+  // the first reveal arms it to now + ttl.
+  it("reveal-anchored: reveal returns the armed deadline (now + ttl)", async () => {
+    const s = stub("anchor-deadline");
+    await s.create({
+      metadata: b(1),
+      content: b(2),
+      ttlMs: 3_600_000,
+      revealBudget: 2,
+      size: 1,
+      revealAnchored: true,
+    });
+
+    const before = Date.now();
+    const r = await s.reveal();
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      // armed to roughly now + 1h, within a generous tolerance for execution time.
+      expect(r.expiresAt).toBeGreaterThanOrEqual(before + 3_600_000 - 5_000);
+      expect(r.expiresAt).toBeLessThanOrEqual(Date.now() + 3_600_000);
+    }
+  });
+
+  // ADR-0017 (option C): a later reveal of a budget>=2 anchored clip keeps the
+  // deadline the FIRST reveal armed; it must NOT re-arm to now+ttl (the rejected
+  // option B, which would overstate the time left for a later viewer).
+  it("reveal-anchored: a later reveal keeps the first-armed deadline, not re-armed", async () => {
+    const s = stub("anchor-2nd");
+    await s.create({
+      metadata: b(1),
+      content: b(2),
+      ttlMs: 3_600_000,
+      revealBudget: 3,
+      size: 1,
+      revealAnchored: true,
+    });
+    const r1 = await s.reveal();
+    const armed = r1.ok ? r1.expiresAt : 0;
+    // a small real delay so a (wrong) re-arm would compute a strictly later deadline
+    await new Promise((res) => setTimeout(res, 25));
+    const r2 = await s.reveal();
+    expect(r2.ok).toBe(true);
+    if (r2.ok) expect(r2.expiresAt).toBe(armed);
+  });
+
+  // ADR-0017 invariant: a wrong PIN must not arm the clock, or a guesser could
+  // start a self-destruct they cannot read. Only a successful reveal arms.
+  it("reveal-anchored: a wrong PIN does not arm the clock", async () => {
+    const s = stub("anchor-pin");
+    await s.create({
+      metadata: b(1),
+      content: b(2),
+      ttlMs: -1000,
+      revealBudget: 2,
+      size: 1,
+      pin: "1234",
+      revealAnchored: true,
+    });
+
+    const bad = await s.reveal("0000");
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason).toBe("bad_pin");
+    // not armed: still waiting under the unrevealed cap.
+    expect((await s.getMeta()).exists).toBe(true);
+
+    // a correct PIN reveals and arms (to the past, given the negative ttl).
+    expect((await s.reveal("1234")).ok).toBe(true);
+    expect(await s.getMeta()).toEqual({ exists: false });
+  });
+
   it("gates a PIN-protected clip: wrong PIN rejected, correct PIN reveals", async () => {
     const s = stub("pin1");
     await s.create({ metadata: b(1), content: b(2, 3), ttlMs: 60_000, revealBudget: 5, size: 2, pin: "1234" });

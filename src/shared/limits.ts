@@ -30,6 +30,22 @@ export const DEFAULT_TTL_MS = 5 * 60_000; // 5 minutes
 export const MAX_REVEAL_BUDGET = 100; // -1 = unlimited; otherwise 1..100
 export const DEFAULT_REVEAL_BUDGET = 1;
 
+// Reveal-anchored TTL (ADR-0017). A reveal-anchored Poof's TTL clock starts at
+// the first Reveal, not at creation, so at create time it has no deadline. Until
+// it is first revealed it waits, bounded only by this unrevealed cap; if it is
+// never revealed within the cap it burns unrevealed, honoring ADR-0002's "nothing
+// is permanent." The cap reuses the max TTL ceiling.
+export const UNREVEALED_CAP_MS = MAX_TTL_MS; // 30 days
+
+// The expiry deadline (epoch ms) the DO arms at create time. A creation-anchored
+// Poof expires at createdAt + ttl. A reveal-anchored Poof has no deadline yet, so
+// it is bounded only by the unrevealed cap here; the real deadline (now + ttl) is
+// armed on the first Reveal (see ClipDO.reveal). Single source of truth for the
+// create-time policy so the Worker and the DO cannot drift.
+export function createExpiryMs(createdAt: number, ttlMs: number, revealAnchored: boolean): number {
+  return revealAnchored ? createdAt + UNREVEALED_CAP_MS : createdAt + ttlMs;
+}
+
 // Clamp a TTL in ms into [MIN_TTL_MS, MAX_TTL_MS]. A non-finite or non-positive
 // value (missing or garbage input) falls back to the default rather than throwing,
 // so a bad form field can never block a create.

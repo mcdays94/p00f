@@ -95,6 +95,10 @@ async function cmdCreate(a) {
   // --viewer-delete lets any link-holder burn this poof early, with no owner
   // token (ADR-0016). Default off.
   const allowViewerDelete = a.flags["viewer-delete"] ? true : undefined;
+  // --reveal-anchored starts the ttl clock at the first reveal instead of at
+  // create (ADR-0017): the link waits (up to the 30-day unrevealed cap) until
+  // first revealed, then burns ttl later. Default off.
+  const revealAnchored = a.flags["reveal-anchored"] ? true : undefined;
 
   const created = await create(http, BASE, {
     content,
@@ -105,6 +109,7 @@ async function cmdCreate(a) {
     showCountdown,
     requireTurnstile,
     allowViewerDelete,
+    revealAnchored,
   });
 
   if (a.flags.json) {
@@ -125,6 +130,11 @@ async function cmdGet(a) {
     const code = r.reason === "gone" ? 3 : r.reason === "decrypt" ? 6 : 5;
     die(`could not read clip: ${r.reason}`, code);
   }
+  // The server discloses the authoritative deadline on a successful reveal
+  // (ADR-0017). For a reveal-anchored poof this reveal just armed it; surface it
+  // as chrome on stderr so stdout stays the content only.
+  if (typeof r.expiresAt === "number")
+    process.stderr.write(`expires at: ${new Date(r.expiresAt).toISOString()}\n`);
   const buf = Buffer.from(r.content);
   const out = typeof a.flags.out === "string" ? a.flags.out : undefined;
   if (out) {
@@ -147,7 +157,7 @@ async function cmdInfo(a) {
   }
   const reveals = i.revealsRemaining === null ? "unlimited" : String(i.revealsRemaining);
   process.stderr.write(
-    `kind: ${i.meta?.kind ?? "?"}\nreveals left: ${reveals}\npin required: ${i.pinRequired}\ncaptcha required: ${i.turnstileRequired}\nviewer delete: ${i.allowViewerDelete}\n`,
+    `kind: ${i.meta?.kind ?? "?"}\nreveals left: ${reveals}\npin required: ${i.pinRequired}\ncaptcha required: ${i.turnstileRequired}\nviewer delete: ${i.allowViewerDelete}\nreveal-anchored: ${i.meta?.revealAnchored === true}\n`,
   );
 }
 

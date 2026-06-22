@@ -118,6 +118,48 @@ describe("Worker API", () => {
     expect((await SELF.fetch(`${base}/api/clip/${id}/reveal`, { method: "POST" })).status).toBe(200);
   });
 
+  it("every successful reveal discloses the deadline via x-poof-expires-at (ADR-0017)", async () => {
+    const cr = await SELF.fetch(`${base}/api/clip`, {
+      method: "POST",
+      body: createForm({ ttlMs: 300_000, revealBudget: 1 }),
+    });
+    const { id } = (await cr.json()) as { id: string };
+    const rr = await SELF.fetch(`${base}/api/clip/${id}/reveal`, { method: "POST" });
+    expect(rr.status).toBe(200);
+    expect(Number(rr.headers.get("x-poof-expires-at"))).toBeGreaterThan(Date.now());
+  });
+
+  it("reveal-anchored: the reveal response discloses the armed deadline (now + ttl) (ADR-0017)", async () => {
+    const fd = createForm({ ttlMs: 3_600_000, revealBudget: 2 });
+    fd.set("revealAnchored", "1");
+    const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: fd });
+    const { id } = (await cr.json()) as { id: string };
+
+    const before = Date.now();
+    const rr = await SELF.fetch(`${base}/api/clip/${id}/reveal`, { method: "POST" });
+    expect(rr.status).toBe(200);
+    const exp = Number(rr.headers.get("x-poof-expires-at"));
+    // armed to roughly now + 1h, not the (effectively immediate) create-anchored deadline.
+    expect(exp).toBeGreaterThanOrEqual(before + 3_600_000 - 5_000);
+    expect(exp).toBeLessThanOrEqual(Date.now() + 3_600_000);
+  });
+
+  it("does not disclose the deadline on a failed (bad PIN) reveal (ADR-0017 invariant)", async () => {
+    const fd = createForm({ revealBudget: 5 });
+    fd.set("pin", "4321");
+    fd.set("revealAnchored", "1");
+    const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: fd });
+    const { id } = (await cr.json()) as { id: string };
+
+    const wrong = await SELF.fetch(`${base}/api/clip/${id}/reveal`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pin: "0000", turnstile: "tok" }),
+    });
+    expect(wrong.status).toBe(401);
+    expect(wrong.headers.get("x-poof-expires-at")).toBeNull();
+  });
+
   it("owner token deletes a clip; a link-holder without it cannot", async () => {
     const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: createForm({ revealBudget: 5 }) });
     const { id, ownerToken } = (await cr.json()) as { id: string; ownerToken: string };

@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./types";
 import { pbkdf2B64, randomSaltB64, sha256B64 } from "./hash";
+import { createExpiryMs } from "../shared/limits";
 
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_ITERS = 100_000;
@@ -19,6 +20,10 @@ export interface CreateInput {
   // Creator opt-in: allow any link-holder (the revealer) to burn the poof early,
   // without the owner token (ADR-0016). Default false; enforced server-side.
   allowViewerDelete?: boolean;
+  // Creator opt-in: start the ttl clock at the first Reveal instead of at create
+  // (ADR-0017). Default false. When set, the clip waits under the unrevealed cap
+  // until first revealed, then expires ttlMs later.
+  revealAnchored?: boolean;
   ownerHash?: string;
   ownerSalt?: string;
   inlineMax?: number; // content larger than this goes to R2
@@ -37,7 +42,7 @@ export type MetaResult =
     };
 
 export type RevealResult =
-  | { ok: true; content: Uint8Array }
+  | { ok: true; content: Uint8Array; expiresAt: number }
   | {
       ok: false;
       reason: "gone" | "pin_required" | "bad_pin" | "locked" | "turnstile_required";
@@ -69,6 +74,10 @@ interface Row {
   owner_salt: string | null;
   require_turnstile: number;
   allow_viewer_delete: number;
+  // ADR-0017: reveal-anchored ttl. reveal_anchored=1 defers the ttl clock to the
+  // first Reveal; ttl_ms is the post-reveal window armed at that point.
+  reveal_anchored: number;
+  ttl_ms: number;
 }
 
 const SCHEMA = `
@@ -90,7 +99,9 @@ const SCHEMA = `
     owner_hash TEXT,
     owner_salt TEXT,
     require_turnstile INTEGER NOT NULL DEFAULT 0,
-    allow_viewer_delete INTEGER NOT NULL DEFAULT 0
+    allow_viewer_delete INTEGER NOT NULL DEFAULT 0,
+    reveal_anchored INTEGER NOT NULL DEFAULT 0,
+    ttl_ms INTEGER NOT NULL DEFAULT 0
   )
 `;
 
@@ -123,6 +134,20 @@ export class ClipDO extends DurableObject<Env> {
     } catch (e) {
       if (!(e instanceof Error && /duplicate column/i.test(e.message))) throw e;
     }
+    // Additive migration (ADR-0017): reveal-anchored ttl columns, same idempotent
+    // ADD COLUMN guard. Clips created before this default to reveal_anchored=0.
+    try {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE clip ADD COLUMN reveal_anchored INTEGER NOT NULL DEFAULT 0",
+      );
+    } catch (e) {
+      if (!(e instanceof Error && /duplicate column/i.test(e.message))) throw e;
+    }
+    try {
+      this.ctx.storage.sql.exec("ALTER TABLE clip ADD COLUMN ttl_ms INTEGER NOT NULL DEFAULT 0");
+    } catch (e) {
+      if (!(e instanceof Error && /duplicate column/i.test(e.message))) throw e;
+    }
   }
 
   // Reads the single clip row. Resilient to the table being dropped by a prior
@@ -131,7 +156,7 @@ export class ClipDO extends DurableObject<Env> {
     try {
       const rows = this.ctx.storage.sql
         .exec<Row>(
-          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt, require_turnstile, allow_viewer_delete FROM clip WHERE id = 1",
+          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt, require_turnstile, allow_viewer_delete, reveal_anchored, ttl_ms FROM clip WHERE id = 1",
         )
         .toArray();
       return rows.length ? rows[0] : null;
@@ -144,7 +169,10 @@ export class ClipDO extends DurableObject<Env> {
   async create(input: CreateInput): Promise<{ ok: true }> {
     this.ensureSchema();
     const now = Date.now();
-    const expiresAt = now + input.ttlMs;
+    // ADR-0017: a reveal-anchored clip has no deadline yet, so at create it is
+    // bounded only by the unrevealed cap; createExpiryMs encodes that policy.
+    const revealAnchored = input.revealAnchored ?? false;
+    const expiresAt = createExpiryMs(now, input.ttlMs, revealAnchored);
 
     let pinHash: string | null = null;
     let pinSalt: string | null = null;
@@ -167,7 +195,7 @@ export class ClipDO extends DurableObject<Env> {
     }
 
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt, require_turnstile, allow_viewer_delete) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt, require_turnstile, allow_viewer_delete, reveal_anchored, ttl_ms) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       now,
       expiresAt,
       input.revealBudget,
@@ -182,6 +210,8 @@ export class ClipDO extends DurableObject<Env> {
       input.ownerSalt ?? null,
       input.requireTurnstile ? 1 : 0,
       input.allowViewerDelete ? 1 : 0,
+      revealAnchored ? 1 : 0,
+      input.ttlMs,
     );
     await this.ctx.storage.setAlarm(expiresAt);
     return { ok: true };
@@ -268,13 +298,27 @@ export class ClipDO extends DurableObject<Env> {
     } else {
       return { ok: false, reason: "gone" };
     }
+    // ADR-0017: the first successful Reveal arms a reveal-anchored clip's ttl
+    // clock. Arm only on the 0 -> 1 transition, which is past the PIN gate, so a
+    // wrong PIN can never start the clock; later reveals keep the armed deadline.
+    const firstReveal = row.reveals_used === 0;
+    const armed = row.reveal_anchored === 1 && firstReveal;
+    const expiresAt = armed ? Date.now() + row.ttl_ms : row.expires_at;
+
     const used = row.reveals_used + 1;
     if (row.reveal_budget >= 0 && used >= row.reveal_budget) {
       await this.burn();
+    } else if (armed) {
+      this.ctx.storage.sql.exec(
+        "UPDATE clip SET reveals_used = ?, expires_at = ? WHERE id = 1",
+        used,
+        expiresAt,
+      );
+      await this.ctx.storage.setAlarm(expiresAt);
     } else {
       this.ctx.storage.sql.exec("UPDATE clip SET reveals_used = ? WHERE id = 1", used);
     }
-    return { ok: true, content };
+    return { ok: true, content, expiresAt };
   }
 
   // Owner-gated early burn (ADR-0008). The owner token never travels in the
