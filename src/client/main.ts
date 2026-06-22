@@ -10,7 +10,7 @@ import {
 import { buildLink } from "../shared/link";
 import type { ClipMeta } from "../shared/core";
 import { isValidPin, PIN_MIN_LEN, PIN_MAX_LEN } from "../shared/pin";
-import { MAX_CLIP_BYTES, formatBytes } from "../shared/limits";
+import { MAX_CLIP_BYTES, formatBytes, clampTtlMs, clampRevealBudget } from "../shared/limits";
 import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, countdownFraction, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
@@ -158,6 +158,9 @@ const PREFS_KEY = "poof:prefs";
 interface Prefs {
   ttlMs?: string;
   revealBudget?: string;
+  ttlNum?: string;
+  ttlUnit?: string;
+  budgetNum?: string;
   showCountdown?: boolean;
   requireTurnstile?: boolean;
 }
@@ -175,6 +178,9 @@ function currentPrefs(): Prefs {
   return {
     ttlMs: ($("#ttl") as HTMLSelectElement).value,
     revealBudget: ($("#budget") as HTMLSelectElement).value,
+    ttlNum: ($("#ttl-num") as HTMLInputElement).value,
+    ttlUnit: ($("#ttl-unit") as HTMLSelectElement).value,
+    budgetNum: ($("#budget-num") as HTMLInputElement).value,
     showCountdown: ($("#show-countdown") as HTMLInputElement).checked,
     requireTurnstile: ($("#require-turnstile") as HTMLInputElement).checked,
   };
@@ -188,8 +194,12 @@ function applyPrefs(p: Prefs) {
   const budget = $("#budget") as HTMLSelectElement;
   if (p.ttlMs && [...ttl.options].some((o) => o.value === p.ttlMs)) ttl.value = p.ttlMs;
   if (p.revealBudget && [...budget.options].some((o) => o.value === p.revealBudget)) budget.value = p.revealBudget;
+  if (p.ttlNum) ($("#ttl-num") as HTMLInputElement).value = p.ttlNum;
+  if (p.ttlUnit) ($("#ttl-unit") as HTMLSelectElement).value = p.ttlUnit;
+  if (p.budgetNum) ($("#budget-num") as HTMLInputElement).value = p.budgetNum;
   if (typeof p.showCountdown === "boolean") ($("#show-countdown") as HTMLInputElement).checked = p.showCountdown;
   if (typeof p.requireTurnstile === "boolean") ($("#require-turnstile") as HTMLInputElement).checked = p.requireTurnstile;
+  syncCustomFields();
 }
 
 function setupPrefs() {
@@ -214,7 +224,7 @@ function setupPrefs() {
       /* storage blocked or full: persistence is best-effort */
     }
   };
-  ["#ttl", "#budget", "#show-countdown", "#require-turnstile"].forEach((sel) =>
+  ["#ttl", "#budget", "#ttl-num", "#ttl-unit", "#budget-num", "#show-countdown", "#require-turnstile"].forEach((sel) =>
     $(sel)?.addEventListener("change", persistIfOn),
   );
   remember.addEventListener("change", () => {
@@ -230,6 +240,7 @@ function setupPrefs() {
   reset?.addEventListener("click", () => {
     ($("#ttl") as HTMLSelectElement).value = "300000";
     ($("#budget") as HTMLSelectElement).value = "1";
+    syncCustomFields();
     ($("#show-countdown") as HTMLInputElement).checked = true;
     ($("#require-turnstile") as HTMLInputElement).checked = false;
     remember.checked = false;
@@ -239,6 +250,17 @@ function setupPrefs() {
       /* ignore */
     }
   });
+}
+
+// Reveal the custom TTL / reveal-count inputs only when the matching select is
+// set to "custom" (#22). Module-scope so initCreate and applyPrefs can both use it.
+function syncCustomFields(): void {
+  const ttl = $("#ttl") as HTMLSelectElement | null;
+  const budget = $("#budget") as HTMLSelectElement | null;
+  const ttlWrap = $("#ttl-custom-wrap");
+  const budgetWrap = $("#budget-custom-wrap");
+  if (ttl && ttlWrap) show(ttlWrap, ttl.value === "custom");
+  if (budget && budgetWrap) show(budgetWrap, budget.value === "custom");
 }
 
 function initCreate() {
@@ -317,6 +339,12 @@ function initCreate() {
     const f = (e.target as HTMLInputElement).files?.[0];
     if (f) void loadFile(f);
   });
+
+  // Custom TTL / reveal-count inputs (#22): reveal the matching input when its
+  // select is on "custom".
+  $("#ttl")?.addEventListener("change", syncCustomFields);
+  $("#budget")?.addEventListener("change", syncCustomFields);
+  syncCustomFields();
 
   $("#create-btn").addEventListener("click", () => void doCreate());
   $("#copy-link").addEventListener("click", () => copyText(($("#link") as HTMLInputElement).value, $("#copy-link")));
@@ -557,6 +585,37 @@ async function doCreate() {
     return;
   }
   const pin = pinRaw || undefined;
+
+  // TTL and reveal budget: each control is a preset OR "custom" (#22). A custom
+  // TTL is a number times a unit; a custom reveal count is a positive integer.
+  // Both are clamped to the shared bounds (the Worker re-clamps as the authority).
+  const ttlSel = $("#ttl") as HTMLSelectElement;
+  const budgetSel = $("#budget") as HTMLSelectElement;
+  let ttlMs: number;
+  if (ttlSel.value === "custom") {
+    const n = Number(($("#ttl-num") as HTMLInputElement).value);
+    if (!Number.isFinite(n) || n < 1) {
+      $("#create-error").textContent = "enter a custom expiry (a positive number).";
+      show($("#create-error"), true);
+      return;
+    }
+    ttlMs = clampTtlMs(n * Number(($("#ttl-unit") as HTMLSelectElement).value));
+  } else {
+    ttlMs = clampTtlMs(Number(ttlSel.value));
+  }
+  let revealBudget: number;
+  if (budgetSel.value === "custom") {
+    const n = Number(($("#budget-num") as HTMLInputElement).value);
+    if (!Number.isFinite(n) || n < 1) {
+      $("#create-error").textContent = "enter a custom reveal count (a positive number).";
+      show($("#create-error"), true);
+      return;
+    }
+    revealBudget = clampRevealBudget(n);
+  } else {
+    revealBudget = clampRevealBudget(Number(budgetSel.value));
+  }
+
   // Creator's show/hide-countdown choice (ADR-0014), default on.
   const showCountdown = ($("#show-countdown") as HTMLInputElement | null)?.checked ?? true;
   // Creator's opt-in to require a captcha on reveal (ADR-0015), default off. When
@@ -571,7 +630,6 @@ async function doCreate() {
   try {
     const master = generateMasterKey();
     const id = generateClipId();
-    const ttlMs = Number(($("#ttl") as HTMLSelectElement).value);
 
     // Stamp the expiry deadline into the encrypted metadata (ADR-0014) so the
     // recipient can render a private countdown; the server never sees it. The
@@ -586,7 +644,7 @@ async function doCreate() {
     fd.set("id", id);
     fd.set("turnstile", turnstileToken());
     fd.set("ttlMs", String(ttlMs));
-    fd.set("revealBudget", ($("#budget") as HTMLSelectElement).value);
+    fd.set("revealBudget", String(revealBudget));
     if (pin) fd.set("pin", pin);
     if (requireTurnstile) fd.set("requireTurnstile", "1");
     fd.set("meta", new Blob([metaCipher]));

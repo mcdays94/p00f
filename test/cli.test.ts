@@ -30,14 +30,27 @@ describe("cli args", () => {
     expect(parseArgs(["f", "--pin", "1234"]).flags.pin).toBe("1234");
   });
 
-  it("maps ttl and reads, rejecting unsupported values", () => {
+  it("maps preset and custom ttl/reads, clamping to bounds and rejecting garbage (#22)", () => {
     expect(ttlToMs("5m")).toBe(300_000);
     expect(ttlToMs("7d")).toBe(604_800_000);
     expect(ttlToMs(undefined)).toBeUndefined();
-    expect(() => ttlToMs("30m")).toThrow();
+    // custom values are now accepted (rejected before #22)
+    expect(ttlToMs("30m")).toBe(1_800_000);
+    expect(ttlToMs("6h")).toBe(21_600_000);
+    expect(ttlToMs("2d")).toBe(172_800_000);
+    // out-of-range clamps to the 30-day max; garbage still throws
+    expect(ttlToMs("60d")).toBe(30 * 24 * 60 * 60_000);
+    expect(() => ttlToMs("abc")).toThrow();
+    expect(() => ttlToMs("10x")).toThrow();
     expect(readsToBudget("unlimited")).toBe(-1);
     expect(readsToBudget("10")).toBe(10);
-    expect(() => readsToBudget("7")).toThrow();
+    // arbitrary positive counts are now accepted (rejected before #22)
+    expect(readsToBudget("7")).toBe(7);
+    expect(readsToBudget("50")).toBe(50);
+    // over-max clamps to 100; non-positive / garbage throws
+    expect(readsToBudget("500")).toBe(100);
+    expect(() => readsToBudget("0")).toThrow();
+    expect(() => readsToBudget("-3")).toThrow();
   });
 
   it("infers kind with explicit override and image/binary heuristics", () => {

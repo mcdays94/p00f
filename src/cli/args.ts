@@ -1,5 +1,6 @@
 // Pure CLI helpers for the poof CLI (POOF-16). No Node APIs here, so this module
 // is unit-testable in the Workers pool alongside the rest of the suite.
+import { clampTtlMs, clampRevealBudget } from "../shared/limits";
 
 export type Command = "create" | "get" | "info" | "burn";
 
@@ -55,27 +56,31 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return { command: command ?? "create", positional, flags };
 }
 
-// The server clamps TTL to {5m, 1h, 1d, 7d} (ADR-0002), so the CLI accepts only
-// those and fails fast on anything else rather than silently snapping to default.
-const TTL_MS: Record<string, number> = {
-  "5m": 5 * 60_000,
-  "1h": 60 * 60_000,
-  "1d": 24 * 60 * 60_000,
-  "7d": 7 * 24 * 60 * 60_000,
-};
+// Custom TTL (#22): accept <number><unit> where unit is m (minutes), h (hours),
+// or d (days), e.g. 30m, 6h, 2d. The presets (5m, 1h, 1d, 7d) are just special
+// cases. The value is clamped into the shared [MIN_TTL_MS, MAX_TTL_MS] range so
+// the CLI and the web agree; an unrecognized format fails fast.
+const TTL_UNIT_MS: Record<string, number> = { m: 60_000, h: 60 * 60_000, d: 24 * 60 * 60_000 };
 
 export function ttlToMs(s: string | boolean | undefined): number | undefined {
   if (s === undefined || s === true || s === false) return undefined;
-  const v = TTL_MS[s];
-  if (v === undefined) throw new Error(`invalid --ttl ${s} (use 5m, 1h, 1d, or 7d)`);
-  return v;
+  const m = /^(\d+)\s*(m|h|d)$/i.exec(s.trim());
+  if (!m) throw new Error(`invalid --ttl ${s} (use e.g. 30m, 6h, 2d)`);
+  return clampTtlMs(Number(m[1]) * TTL_UNIT_MS[m[2].toLowerCase()]);
 }
 
+// Custom reveal budget (#22): any positive integer (clamped to 1..MAX_REVEAL_BUDGET),
+// or "unlimited"/"inf" for -1. Was previously limited to {1, 3, 10, unlimited}.
 export function readsToBudget(s: string | boolean | undefined): number | undefined {
   if (s === undefined || s === true || s === false) return undefined;
   if (s === "unlimited" || s === "inf") return -1;
-  if (s === "1" || s === "3" || s === "10") return Number(s);
-  throw new Error(`invalid --reads ${s} (use 1, 3, 10, or unlimited)`);
+  const t = s.trim();
+  if (/^\d+$/.test(t)) {
+    const n = Number(t);
+    if (n < 1) throw new Error(`invalid --reads ${s} (use a positive number or "unlimited")`);
+    return clampRevealBudget(n);
+  }
+  throw new Error(`invalid --reads ${s} (use a positive number or "unlimited")`);
 }
 
 export function inferKind(opts: {

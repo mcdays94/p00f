@@ -90,6 +90,12 @@ select {
 select:hover { border-color: var(--coral); }
 select:focus { outline: none; border-color: var(--coral); }
 
+/* Custom TTL / reveal-count inputs (#22), shown when the matching select is set
+   to "custom". Styled to match the app's selects. */
+.num-input { width: 84px; background-color: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: var(--sans); font-size: 14px; }
+.num-input:hover, .num-input:focus { outline: none; border-color: var(--coral); }
+.custom-row { display: flex; align-items: center; gap: 8px; }
+
 .cf-turnstile { margin: 4px 0 16px; min-height: 4px; }
 
 .btn { font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em; padding: 11px 18px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); cursor: pointer; transition: border-color 0.15s, transform 0.05s; }
