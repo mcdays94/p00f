@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>p00f og card</title>
+<style>
+  /* Static 1200x630 Open Graph / link-preview card. Mirrors public/styles.css
+     and docs/hero/banner.html: dark palette + 22px dot grid + the p00f wordmark.
+     Rendered to public/og.png with:
+       npx playwright screenshot --viewport-size=1200,630 docs/og/card.html public/og.png
+     Generic and content-free by design (the server is zero-knowledge and the
+     same card serves every poof link), so a preview leaks nothing. */
+  :root {
+    --bg: #0a0a0b;
+    --text: #ededed;
+    --muted: #8a8a92;
+    --coral: #ff6363;
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  html, body { margin: 0; padding: 0; }
+  .card {
+    position: relative;
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 1px 1px, #1d1d20 1px, transparent 0) 0 0 / 22px 22px,
+      var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    font-family: var(--mono);
+  }
+  /* a soft coral glow behind the wordmark for depth */
+  .glow {
+    position: absolute;
+    width: 760px;
+    height: 760px;
+    left: 50%;
+    top: 46%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255,99,99,0.10) 0%, rgba(255,99,99,0) 60%);
+    pointer-events: none;
+  }
+  .kicker {
+    position: relative;
+    font-size: 24px;
+    letter-spacing: 0.36em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .wordmark {
+    position: relative;
+    font-weight: 700;
+    font-size: 200px;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1;
+  }
+  .wordmark .dot { color: var(--coral); }
+  .tagline {
+    position: relative;
+    font-size: 46px;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  .tagline .poofs { color: var(--coral); }
+  .url {
+    position: absolute;
+    bottom: 40px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 22px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="glow"></div>
+    <div class="kicker">zero-knowledge ephemeral clipboard</div>
+    <div class="wordmark">p00f<span class="dot">.</span></div>
+    <div class="tagline">Reveals, then <span class="poofs">poofs</span>.</div>
+    <div class="url">p00f.me</div>
+  </div>
+</body>
+</html>
