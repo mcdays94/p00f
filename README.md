@@ -8,12 +8,12 @@
 Encrypt something, get a link that self-destructs, hand it off. The server only ever holds ciphertext.</p>
 
 <p align="center">
-  <a href="https://p00f.me"><img src="https://img.shields.io/badge/Try%20it%20at%20p00f.me-FF6363?style=for-the-badge&logoColor=white" alt="Try it at p00f.me" /></a>
+  <a href="https://p00f.me"><img src="https://img.shields.io/badge/Try%20it%20at%20p00f.me-FF5959?style=for-the-badge&logoColor=white" alt="Try it at p00f.me" /></a>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@p00f/core"><img alt="@p00f/core on npm" src="https://img.shields.io/npm/v/@p00f/core?style=flat-square&color=FF6363&label=%40p00f%2Fcore" /></a>
-  <a href="LICENSE"><img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-FF6363?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@p00f/core"><img alt="@p00f/core on npm" src="https://img.shields.io/npm/v/@p00f/core?style=flat-square&color=FF5959&label=%40p00f%2Fcore" /></a>
+  <a href="LICENSE"><img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-FF5959?style=flat-square" /></a>
 </p>
 
 ---

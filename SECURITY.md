@@ -9,16 +9,37 @@ p00f is a zero-knowledge, ephemeral clipboard and agent-handoff tool. This docum
 - **Ephemeral by default.** A Clip burns when its TTL expires or its reveal budget reaches zero, whichever comes first (`docs/adr/0002-clip-lifecycle.md`).
 - **One core, many shells.** The same audited crypto runs in the web app and the `poof` CLI. The hosted API is a ciphertext-only relay (`docs/adr/0010-agent-machine-integration.md`).
 
-## What is NOT protected (be honest with yourself)
+## Data flow
+
+A poof link looks like `https://p00f.me/c/<id>#<key>`. The `<id>` addresses the ciphertext on the server; the part after `#` is the key, and it never leaves your client.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Creator
+    participant S as p00f server
+    participant R as Recipient
+    Note over C: browser, CLI, or agent
+    C->>C: generate a random key and encrypt locally
+    C->>S: upload ciphertext only
+    S->>S: store in a per-clip Durable Object
+    Note over S: TTL alarm plus atomic reveal budget
+    S-->>C: clip id
+    C->>C: build the link with the key in the fragment
+    Note over C,R: the key fragment never touches the server
+    C->>R: hand over the link
+    R->>S: fetch ciphertext
+    S->>S: spend one reveal and burn when the budget is empty
+    S-->>R: ciphertext
+    R->>R: decrypt locally with the key from the fragment
+```
+
+## What is NOT protected
 
 - **The recipient sees plaintext.** Anyone you give the Link to (a person, an agent, or the LLM behind that agent) can read the content. That is the point of a handoff. Zero-knowledge protects the content from the storage operator, not from the recipient.
 - **Lose the Link and it is gone.** There is no recovery. The server cannot help; it has no key.
 - **The PIN/password is access control, not confidentiality.** An optional variable-length PIN or password (4 to 128 chars) gates server-side release of the content and is folded into the content key. It protects a leaked Link from being revealed, but it is not what keeps the content secret (the Fragment Key is). See `docs/adr/0004-pin-model.md`.
 - **Coarse size is observable.** Ciphertext length approximates content size, and content over roughly 1 MB is stored in R2. The exact content is never readable, but a size bucket is (`docs/adr/0003-content-model.md`).
-
-## Reporting a vulnerability
-
-Please do not open a public issue for security problems. Open a private GitHub Security Advisory on this repository (the "Report a vulnerability" button under the Security tab), or contact the repository owner privately. We will acknowledge receipt and work with you on a fix and disclosure timeline.
 
 ## Operator notes
 

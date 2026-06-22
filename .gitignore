@@ -10,3 +10,8 @@ HANDOFF.md
 bin/
 skill-observations/
 poof-issues.html
+
+# Local-only internal docs (kept on disk, not tracked in the public repo)
+AGENTS.md
+DESIGN.md
+CONTEXT.md

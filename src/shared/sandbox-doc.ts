@@ -39,7 +39,7 @@ pre.code{margin:0;padding:0;white-space:pre-wrap;word-break:break-word;font-fami
 pre.code .t-c{color:#8a8a92;font-style:italic}
 pre.code .t-s{color:#3ad29f}
 pre.code .t-n{color:#ff9d6b}
-pre.code .t-k{color:#ff6363}
+pre.code .t-k{color:#ff5959}
 pre.code .t-i{color:#ededed}
 pre.code .t-p{color:#8a8a92}
 pre.code .t-o{color:#c94f4f}
