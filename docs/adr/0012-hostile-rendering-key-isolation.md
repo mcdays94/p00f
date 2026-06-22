@@ -21,4 +21,4 @@ Revealed Clip content is attacker-controlled and is decrypted on the p00f origin
 
 - An XSS payload inside a Clip executes, at worst, in an opaque-origin sandbox with no key, no parent access, and no network, so it cannot exfiltrate the Fragment Key.
 - Rich rendering is constrained (no inline SVG, no arbitrary HTML execution), accepted as the cost of protecting the key.
-- This burden falls on the web app. The CLI and MCP shells return bytes to the caller rather than rendering, so they avoid the key-exfil risk entirely; their only related duty is to not write raw binary to a TTY (a usability concern, not a key concern).
+- This burden falls on the web app. The CLI shell returns bytes to the caller rather than rendering, so it avoids the key-exfil risk entirely; its only related duty is to not write raw binary to a TTY (a usability concern, not a key concern).

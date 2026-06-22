@@ -1,9 +1,9 @@
-// The base URL of the p00f deployment the CLI and MCP server talk to. The
-// published @p00f/cli binary defaults to the live hosted app so `npx @p00f/cli`
-// works with no configuration (#24); set POOF_BASE (or the P00F_BASE alias) to
-// point a local build at a dev server, e.g. POOF_BASE=https://poof.localhost.
-// Defined once and shared by both shells so the default cannot drift between
-// the CLI and the MCP server.
+// The base URL of the p00f deployment the CLI talks to. The published @p00f/cli
+// binary defaults to the live hosted app so `npx @p00f/cli` works with no
+// configuration (#24); set POOF_BASE (or the P00F_BASE alias) to point a local
+// build at a dev server, e.g. POOF_BASE=https://poof.localhost. Defined once so
+// the default is shared by the CLI and the published wire-format docs (llms.txt
+// and the discovery doc) and cannot drift between them.
 export const DEFAULT_POOF_BASE = "https://p00f.me";
 
 export interface BaseEnv {

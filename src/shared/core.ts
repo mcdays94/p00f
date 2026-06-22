@@ -1,5 +1,5 @@
 // @p00f/core: the single zero-knowledge engine (ADR-0010). One implementation of
-// crypto + Link + protocol, consumed by the web app, the CLI, and the MCP server.
+// crypto + Link + protocol, consumed by the web app and the CLI.
 // Web Crypto only, so it runs in the browser, in Node 20+, and in workerd.
 export * from "./crypto";
 export * from "./link";

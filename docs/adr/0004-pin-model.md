@@ -12,7 +12,7 @@ A Clip may carry an optional PIN or password, shared out-of-band, as a second fa
 - **Server-side release gate.** The Clip's Durable Object stores a salted, slow hash (PBKDF2) of the secret and verifies a submitted secret before releasing the content blob. The single-threaded DO makes the attempt counter race-free.
 - **Defence-in-depth key binding.** content-blob key = `derive(Fragment Key + secret)`; metadata-blob key = `derive(Fragment Key only)`. The pre-reveal card renders without the secret, but the content cannot be decrypted without it even if storage is breached and the link leaks.
 - **Failed-attempt policy: progressive lockout / cooldown (option A), not burn.** After ~5 attempts cooldown escalates; the TTL ends the Clip.
-- **Turnstile gates each secret submission** (see ADR-0005). This is why a PIN/password Clip cannot be revealed from the machine path (CLI/MCP), which has no Turnstile (ADR-0011); such Clips are browser-reveal-only.
+- **Turnstile gates each secret submission** (see ADR-0005). This originally made a PIN/password Clip browser-reveal-only, because the machine path (the CLI) has no Turnstile (ADR-0011). ADR-0015 later decoupled the reveal captcha from the PIN, so a default PIN poof is now revealable from the CLI with just the PIN.
 
 ## Considered options
 
