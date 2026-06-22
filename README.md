@@ -8,7 +8,7 @@
 Encrypt something, get a link that self-destructs, hand it off. The server only ever holds ciphertext.</p>
 
 <p align="center">
-  <a href="https://p00f.me"><img src="docs/create-button.gif" width="58%" alt="The genuine p00f create button: a rounded dark panel over a faint drifting field of monospace glyphs, with a centered mono label that ascii-scrambles between 'create poof' and the terminal command '$ poof'. Click it to create a poof at p00f.me." /></a>
+  <a href="https://p00f.me"><img src="https://img.shields.io/badge/Try%20it%20at%20p00f.me-FF6363?style=for-the-badge&logoColor=white" alt="Try it at p00f.me" /></a>
 </p>
 
 <p align="center">
@@ -25,11 +25,7 @@ It is also fully open source, and for a zero-knowledge tool that is the whole po
 
 ## Use it
 
-Go to **[p00f.me](https://p00f.me)**, drop in what you want to share, choose how long it lives and how many times it can be opened, and share the link. That is the entire flow:
-
-<p align="center">
-  <img src="docs/usage.gif" width="85%" alt="Screen recording of the p00f web app on a dark dotted background. The p00f wordmark and the subtitle zero-knowledge ephemeral clipboard sit at the top. A two-line dummy secret (OPENAI_API_KEY and STRIPE_SECRET) is typed into the composer textarea; the create button enables and its label ascii-scrambles to dollar-sign poof; clicking it sweeps a coral ascii smoke ring across the button; the view then switches to a result panel headed your link, showing the generated poof link with copy and share buttons and the note that anyone with the link can decrypt it and that the server never sees the contents." />
-</p>
+Go to **[p00f.me](https://p00f.me)**, drop in what you want to share, choose how long it lives and how many times it can be opened, and share the link. That is the entire flow.
 
 A lone URL can be shared as a masked link, and text, code, images, video, and audio render right on the reveal page.
 
@@ -48,17 +44,14 @@ Don't trust, verify. We would still rather you just use [p00f.me](https://p00f.m
 Pasting an API key, token, or password straight into an agent chat is a bad habit. That text tends to get logged, retained in history, synced to a provider, and sometimes used for training. p00f is the basic, boring fix:
 
 ```sh
-# point the CLI at the hosted app (see "From your terminal or your agent" below)
-export POOF_BASE=https://p00f.me
-
-# poof the secret, get a link
-$ printf '%s' "$OPENAI_API_KEY" | poof --ttl 1h --reads 1
+# poof the secret, get a link (npx @p00f/cli, or `poof` if installed globally)
+$ printf '%s' "$OPENAI_API_KEY" | npx @p00f/cli --ttl 1h --reads 1
 https://p00f.me/c/q8Zr2nF1#3sP_Kb...the-key-stays-in-the-fragment
 
 # hand that link to your agent. it reveals the secret exactly once, then it burns.
 ```
 
-The agent reveals it through its own `poof` MCP server or CLI, so decryption happens on the agent's side and the hosted API only ever relays ciphertext. Because a default poof needs no human captcha to reveal ([ADR-0015](docs/adr/0015-optional-reveal-turnstile.md)), a headless agent can open it; for a sensitive secret the creator can require a PIN, cap it to a single reveal, or turn on a human captcha that keeps it browser-only.
+The agent reveals it with the same `poof` CLI (`npx @p00f/cli get <link>`), so decryption happens on the agent's side and the hosted API only ever relays ciphertext. Because a default poof needs no human captcha to reveal ([ADR-0015](docs/adr/0015-optional-reveal-turnstile.md)), a headless agent can open it; for a sensitive secret the creator can require a PIN, cap it to a single reveal, or turn on a human captcha that keeps it browser-only.
 
 > A poof is not a vault. It is a courier that forgets. If a recipient (human or agent) is allowed to see the plaintext, assume they can copy it. p00f controls how long and how often a poof can be revealed, not what happens after. The trust model is spelled out honestly in [`SECURITY.md`](SECURITY.md).
 
@@ -108,52 +101,27 @@ Revealed content renders inside a sandboxed, opaque-origin iframe, so a hostile 
 
 ## From your terminal or your agent
 
-The web app is the easy path. For scripts and agents, the same poofs are created and revealed over the shared `@p00f/core` engine, pointed at p00f.me.
-
-### CLI
-
-Build the CLI from this repo, then point it at the hosted app:
+The web app is the easy path. For scripts and agents there is **[`@p00f/cli`](https://www.npmjs.com/package/@p00f/cli)**, a thin shell over the same `@p00f/core` engine. It defaults to the hosted app at p00f.me, so it works with no configuration.
 
 ```sh
-npm install
-npm run build:cli
-npm link                          # puts `poof` (and `poof-mcp`) on your PATH
-export POOF_BASE=https://p00f.me  # otherwise the CLI talks to a local dev server
-
-# create from a file or stdin. stdout is the link, and only the link.
-poof secrets.env
-cat debug.log | poof --ttl 1h --reads 3
+# run it ad hoc with npx, or install it (`npm i -g @p00f/cli`) to get a `poof` command
+npx @p00f/cli secrets.env
+cat debug.log | npx @p00f/cli --ttl 1h --reads 3
 
 # reveal, inspect without spending a reveal, and burn early
-poof get  https://p00f.me/c/ID#KEY
-poof info https://p00f.me/c/ID#KEY      # non-consuming
-poof burn https://p00f.me/c/ID#KEY --token OWNER_TOKEN
+npx @p00f/cli get  https://p00f.me/c/ID#KEY
+npx @p00f/cli info https://p00f.me/c/ID#KEY      # non-consuming
+npx @p00f/cli burn https://p00f.me/c/ID#KEY --token OWNER_TOKEN
 ```
 
-stdout is the link only, so `LINK=$(poof report.md)` composes cleanly. The owner token needed to burn early goes to stderr, or use `--json`. Flags include `--ttl`, `--reads`, `--pin`, `--require-turnstile`, `--no-countdown`, and `--out FILE`.
+stdout is the link only, so `LINK=$(npx @p00f/cli report.md)` composes cleanly. The owner token needed to burn early goes to stderr, or use `--json`. Flags include `--ttl`, `--reads`, `--pin`, `--require-turnstile`, `--no-countdown`, and `--out FILE`. Set `POOF_BASE` to point it at another deployment.
 
-### MCP (agents)
-
-Build the MCP server (`npm run build:mcp`) and register it with your agent:
-
-```jsonc
-{
-  "mcpServers": {
-    "poof": {
-      "command": "node",
-      "args": ["/absolute/path/to/bin/poof-mcp.mjs"],
-      "env": { "POOF_BASE": "https://p00f.me" }
-    }
-  }
-}
-```
-
-Tools: `poof_create`, `poof_read`, `poof_info` (non-consuming), `poof_burn`. Decryption happens in the local server, so the hosted API only ever sees ciphertext. A `secret`-kind poof requires `confirm: true` before it is revealed into the model context. Agents that just want the library can `npm install @p00f/core` and call it directly; a remote MCP facade could only ever relay ciphertext, since a functional read needs the caller-side engine (see [ADR-0010](docs/adr/0010-agent-machine-integration.md)).
+Agents that want the library directly can `npm install @p00f/core` and call it; the hosted API only ever relays ciphertext, so a functional read needs the caller-side engine (see [ADR-0010](docs/adr/0010-agent-machine-integration.md)).
 
 ## What a creator controls
 
-- **Burns after** a TTL: 5 minutes, 1 hour, 1 day, or 7 days.
-- **Or after** N reveals: 1, 3, 10, or unlimited (within the TTL). The counter is atomic in the Durable Object, so concurrent reveals cannot overspend it.
+- **Burns after** a TTL: a quick preset or any custom value, from 1 minute up to 30 days.
+- **Or after** N reveals: a preset or any custom count up to 100, or unlimited (within the TTL). The counter is atomic in the Durable Object, so concurrent reveals cannot overspend it.
 - **PIN or password** (4 to 128 characters), folded into the key derivation. A wrong-PIN lockout (5 attempts) lives in the Durable Object.
 - **Reveal captcha** (optional, default off): require a human to pass a challenge before revealing. This is what makes a poof browser-only; leave it off for agent-revealable poofs.
 - **Countdown**: the reveal page shows a live fuse and best-effort auto-clears when the deadline passes. This is honest UX, not confidentiality (an already-revealed poof may have been copied).
@@ -165,11 +133,9 @@ Tools: `poof_create`, `poof_read`, `poof_info` (non-consuming), `poof_burn`. Dec
 
 **Does not:** stop a recipient who is allowed to see a secret from copying, screenshotting, or re-sharing it; guarantee deletion on a device that already revealed and cached it; act as long-term storage or a password manager. p00f is a courier that forgets, and it is honest about the rest in [`SECURITY.md`](SECURITY.md).
 
-## Run your own (optional)
+## Built on Cloudflare
 
-You do not need to. [p00f.me](https://p00f.me) is the app, and it is the easiest way to make and share poofs. The source is here for transparency, not because hosting is required.
-
-If you do want your own instance, it runs on Cloudflare's free plan: create the R2 bucket (`CLOUDFLARE_ACCOUNT_ID=<id> wrangler r2 bucket create poof-content`), set a real `TURNSTILE_SECRET` (`wrangler secret put TURNSTILE_SECRET`), keep the `CREATE_LIMIT` rate-limit binding in `wrangler.jsonc`, and `wrangler deploy`.
+p00f runs entirely on Cloudflare: Workers serve the app and the API, a per-poof Durable Object holds each clip and runs its burn timer, and larger payloads spill to R2. Encryption is all client-side, so none of that infrastructure can read your content.
 
 ## Develop
 
@@ -179,7 +145,7 @@ npm run dev          # builds the client and starts wrangler dev
 npm test             # vitest under @cloudflare/vitest-pool-workers
 ```
 
-The web app (`src/client/`), CLI (`src/cli/`), and MCP server (`src/mcp/`) are thin shells over the shared engine in `src/shared/`; the Worker and Durable Object live in `src/worker/`. See [`CONTEXT.md`](CONTEXT.md) for the vocabulary and [`docs/adr/`](docs/adr/) for the decisions behind the design. The hero banner above is generated from [`docs/hero/banner.html`](docs/hero/banner.html).
+The web app (`src/client/`) and CLI (`src/cli/`) are thin shells over the shared engine in `src/shared/`; the Worker and Durable Object live in `src/worker/`. See [`CONTEXT.md`](CONTEXT.md) for the vocabulary and [`docs/adr/`](docs/adr/) for the decisions behind the design. The hero banner above is generated from [`docs/hero/banner.html`](docs/hero/banner.html).
 
 ## Status
 
