@@ -166,6 +166,22 @@ tsWin.onTsCreateExpired = () => expandTs("#ts-widget");
 tsWin.onTsReveal = () => collapseTs("#reveal-ts");
 tsWin.onTsRevealExpired = () => expandTs("#reveal-ts");
 
+// #31 race fix: Turnstile's api.js is async, but the handlers above are assigned
+// in this deferred module bundle, so a fast or cached challenge can solve and
+// fire its data-callback BEFORE this code runs, leaving the widget on screen.
+// The strict CSP (no 'unsafe-inline', ADR-0012) rules out defining the globals
+// inline in <head>, so instead reconcile once on load: collapse any widget that
+// already holds a Turnstile token. Solves after this point hit the handlers.
+function reconcileSolvedTs(): void {
+  for (const id of ["ts-widget", "reveal-ts"]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const input = el.querySelector('input[name="cf-turnstile-response"]') as HTMLInputElement | null;
+    if (input && input.value) el.classList.add("ts-solved");
+  }
+}
+reconcileSolvedTs();
+
 // ---------------- create ----------------
 
 let pending: { bytes: Uint8Array; meta: ClipMeta } | null = null;
