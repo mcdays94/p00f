@@ -89,6 +89,25 @@ async function shareLink(): Promise<void> {
   }
 }
 
+// Turnstile auto-hide (#23): once solved, collapse the widget and show a compact
+// "verified" note; re-show on expiry/error so it can be re-solved. Turnstile uses
+// implicit rendering and calls these handlers by name, so they live on window.
+function collapseTs(widgetSel: string, okSel: string): void {
+  $(widgetSel)?.classList.add("ts-solved");
+  const ok = $(okSel);
+  if (ok) ok.hidden = false;
+}
+function expandTs(widgetSel: string, okSel: string): void {
+  $(widgetSel)?.classList.remove("ts-solved");
+  const ok = $(okSel);
+  if (ok) ok.hidden = true;
+}
+const tsWin = window as unknown as Record<string, () => void>;
+tsWin.onTsCreate = () => collapseTs("#ts-widget", "#ts-ok");
+tsWin.onTsCreateExpired = () => expandTs("#ts-widget", "#ts-ok");
+tsWin.onTsReveal = () => collapseTs("#reveal-ts", "#reveal-ts-ok");
+tsWin.onTsRevealExpired = () => expandTs("#reveal-ts", "#reveal-ts-ok");
+
 // ---------------- create ----------------
 
 let pending: { bytes: Uint8Array; meta: ClipMeta } | null = null;
