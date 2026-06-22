@@ -13,6 +13,7 @@ export interface MetaResponse {
   revealsRemaining: number | null;
   pinRequired: boolean;
   turnstileRequired: boolean;
+  allowViewerDelete: boolean;
   size?: number;
 }
 
@@ -24,6 +25,7 @@ export interface CreateCiphertext {
   revealBudget?: number;
   pin?: string;
   requireTurnstile?: boolean;
+  allowViewerDelete?: boolean;
   turnstile?: string;
 }
 
@@ -49,6 +51,7 @@ export async function createClip(
   if (c.revealBudget != null) fd.set("revealBudget", String(c.revealBudget));
   if (c.pin) fd.set("pin", c.pin);
   if (c.requireTurnstile) fd.set("requireTurnstile", "1");
+  if (c.allowViewerDelete) fd.set("allowViewerDelete", "1");
   // metaCipher/contentCipher are Uint8Array<ArrayBufferLike>; cast to BlobPart
   // (the DOM lib wants an ArrayBuffer-backed view). Type-only; no runtime change.
   fd.set("meta", new Blob([c.metaCipher as BlobPart]));
@@ -68,7 +71,7 @@ export async function createClip(
 export async function getMeta(http: HttpLike, baseUrl: string, id: string): Promise<MetaResponse> {
   const res = await http(`${trimBase(baseUrl)}/api/clip/${id}/meta`);
   if (res.status === 404)
-    return { exists: false, revealsRemaining: null, pinRequired: false, turnstileRequired: false };
+    return { exists: false, revealsRemaining: null, pinRequired: false, turnstileRequired: false, allowViewerDelete: false };
   if (!res.ok) throw new Error(`meta failed (${res.status})`);
   const j = (await res.json()) as {
     exists: boolean;
@@ -76,6 +79,7 @@ export async function getMeta(http: HttpLike, baseUrl: string, id: string): Prom
     revealsRemaining: number | null;
     pinRequired: boolean;
     turnstileRequired?: boolean;
+    allowViewerDelete?: boolean;
     size: number;
   };
   return {
@@ -84,6 +88,7 @@ export async function getMeta(http: HttpLike, baseUrl: string, id: string): Prom
     revealsRemaining: j.revealsRemaining,
     pinRequired: j.pinRequired,
     turnstileRequired: j.turnstileRequired ?? false,
+    allowViewerDelete: j.allowViewerDelete ?? false,
     size: j.size,
   };
 }
@@ -125,4 +130,19 @@ export async function deleteClip(
     body: JSON.stringify({ ownerToken }),
   });
   return { ok: res.ok };
+}
+
+// Viewer-initiated burn (ADR-0016): no owner token. Only succeeds when the
+// creator set allowViewerDelete; the server returns 403 otherwise. A 200 (incl.
+// the "already gone" case) is treated as success, since the destroy intent is
+// then satisfied, mirroring the owner deleteClip path.
+export async function burnAsViewer(
+  http: HttpLike,
+  baseUrl: string,
+  id: string,
+): Promise<{ ok: boolean; reason?: "forbidden" }> {
+  const res = await http(`${trimBase(baseUrl)}/api/clip/${id}/burn`, { method: "POST" });
+  if (res.ok) return { ok: true };
+  if (res.status === 403) return { ok: false, reason: "forbidden" };
+  return { ok: false };
 }

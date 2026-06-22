@@ -28,6 +28,10 @@ export interface Envelope {
   // When false (the default) any link-holder, including a headless agent, can
   // reveal. Lets an agent decide up front whether it can complete the reveal.
   turnstileRequired: boolean;
+  // True when the creator allowed any link-holder to burn the poof early
+  // (ADR-0016). Default false. Lets a viewer client decide whether to offer a
+  // "delete now" affordance, and tells an agent the link can self-destruct.
+  allowViewerDelete: boolean;
   hasContent: boolean;
   sizeBucket: string;
   metadata: string; // base64url AES-GCM ciphertext (12-byte IV prepended)
@@ -38,6 +42,7 @@ export function buildEnvelope(input: {
   revealsRemaining: number | null;
   pinRequired: boolean;
   turnstileRequired?: boolean;
+  allowViewerDelete?: boolean;
   size: number;
   metadata: Uint8Array;
 }): Envelope {
@@ -46,6 +51,7 @@ export function buildEnvelope(input: {
     revealsRemaining: input.revealsRemaining,
     pinRequired: input.pinRequired,
     turnstileRequired: input.turnstileRequired ?? false,
+    allowViewerDelete: input.allowViewerDelete ?? false,
     hasContent: true,
     sizeBucket: sizeBucket(input.size),
     metadata: base64urlEncode(input.metadata),
@@ -70,9 +76,9 @@ export const WIRE_FORMAT = {
     nonce: "12 random bytes (IV), prepended to the ciphertext: layout is iv(12) || ciphertext+tag.",
   },
   envelope: {
-    cleartext: ["id", "revealsRemaining", "pinRequired", "turnstileRequired", "hasContent", "sizeBucket"],
+    cleartext: ["id", "revealsRemaining", "pinRequired", "turnstileRequired", "allowViewerDelete", "hasContent", "sizeBucket"],
     encrypted: "metadata: base64url AES-GCM ciphertext of the JSON { kind, filename, mime, size, expiresAt, showCountdown }",
-    note: "The exact kind, filename, mime, size, and the expiry deadline (expiresAt) are inside the encrypted metadata blob, never in cleartext (ADR-0014). pinRequired and turnstileRequired tell a caller whether it needs the out-of-band PIN/password and/or a human (a turnstileRequired poof cannot be revealed by the machine path).",
+    note: "The exact kind, filename, mime, size, and the expiry deadline (expiresAt) are inside the encrypted metadata blob, never in cleartext (ADR-0014). pinRequired and turnstileRequired tell a caller whether it needs the out-of-band PIN/password and/or a human (a turnstileRequired poof cannot be revealed by the machine path). allowViewerDelete is true when the creator let any link-holder burn the poof early via POST /api/clip/:id/burn (ADR-0016).",
   },
 } as const;
 
@@ -104,6 +110,7 @@ export function discoveryDoc(origin: string): DiscoveryDoc {
       reveal: `POST ${o}/api/clip/:id/reveal. Consuming. JSON body carries { pin } when pinRequired and { turnstile } when turnstileRequired (both optional otherwise). Returns the encrypted content as application/octet-stream; decrypt caller-side. A poof with turnstileRequired=false is revealable by a headless agent with no token (and with the PIN if pinRequired).`,
       meta: `GET ${o}/api/clip/:id/meta. Non-consuming legacy metadata endpoint.`,
       delete: `POST ${o}/api/clip/:id/delete (body: { ownerToken }). Owner-gated early burn.`,
+      burn: `POST ${o}/api/clip/:id/burn. Viewer-initiated early burn, no owner token. Only honored when the envelope's allowViewerDelete is true (the creator opted in); otherwise HTTP 403. Destroys the poof for everyone.`,
       health: `GET ${o}/health`,
     },
     limits: { maxClipBytes: MAX_CLIP_BYTES, inlineMaxBytes: INLINE_MAX_BYTES, maxTtlMs: MAX_TTL_MS, maxRevealBudget: MAX_REVEAL_BUDGET },
@@ -162,6 +169,10 @@ HTTP wire format below is only for callers that cannot run the CLI.
 - POST ${o}/api/clip/:id/delete  body { ownerToken }
   Owner-gated early burn. The owner token is returned once at create and is
   never carried in the link.
+- POST ${o}/api/clip/:id/burn
+  Viewer-initiated early burn, no owner token. Only honored when the envelope
+  says allowViewerDelete is true (the creator opted in); otherwise HTTP 403.
+  Destroys the poof for everyone, not just the caller.
 - GET ${o}/health
 
 ## Limits

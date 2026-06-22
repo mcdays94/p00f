@@ -33,8 +33,7 @@
         <a class="wordmark" href="/">p00f<span class="dot">.</span></a>
         <span class="alpha-tag" data-testid="alpha-tag">Alpha</span>
       </div>
-      <p class="kicker">zero-knowledge ephemeral clipboard</p>
-      <p class="masthead-tagline" id="masthead-tagline"></p>
+      <p class="kicker">the zero-knowledge ephemeral clipboard</p>
     </header>
 
     <!-- CREATE -->
@@ -105,8 +104,12 @@
             <label class="secret-toggle">require captcha to reveal
               <input id="require-turnstile" type="checkbox" data-testid="require-turnstile" />
             </label>
+            <label class="secret-toggle">let the viewer delete it
+              <input id="allow-viewer-delete" type="checkbox" data-testid="allow-viewer-delete" />
+            </label>
           </div>
           <p class="opt-note">Leave the captcha off so an agent or script can reveal this poof from the link. Turn it on to require a human (browser) to open it.</p>
+          <p class="opt-note">With "let the viewer delete it" on, anyone you share the link with can burn the poof for everyone once they open it. Off by default.</p>
           <div class="prefs-save">
             <label class="pref-toggle">remember these settings on this device
               <input id="remember-prefs" type="checkbox" data-testid="remember-prefs" />
@@ -129,6 +132,7 @@
 
       <div id="result" class="panel result" hidden>
         <p class="panel-kicker">// your link</p>
+        <p class="result-tagline" id="result-tagline"></p>
         <div class="link-row">
           <input id="link" class="link" data-testid="link" readonly />
           <button id="share-link" class="btn primary" data-testid="share-link" hidden>share</button>
@@ -176,6 +180,11 @@
         <p class="panel-kicker">// revealed</p>
         <p class="reveal-tagline" id="reveal-tagline"></p>
         <div id="content" class="content" data-testid="content"></div>
+        <div id="viewer-delete-row" class="viewer-delete" hidden>
+          <p class="muted">The creator let viewers delete this. Burn it now so no one else can open it.</p>
+          <button id="viewer-delete" class="btn ghost" data-testid="viewer-delete">delete now</button>
+          <p id="viewer-delete-status" class="muted" data-testid="viewer-delete-status" hidden></p>
+        </div>
         <div class="reveal-cta">
           <a class="btn ghost" href="/">create your own poof</a>
         </div>

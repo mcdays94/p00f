@@ -7,7 +7,7 @@ export * from "./protocol";
 
 import { generateMasterKey, generateClipId, encryptBlob, decryptBlob } from "./crypto";
 import { buildLink, parseLink } from "./link";
-import { createClip, getMeta, revealClip, deleteClip, type HttpLike } from "./protocol";
+import { createClip, getMeta, revealClip, deleteClip, burnAsViewer, type HttpLike } from "./protocol";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -38,6 +38,9 @@ export interface CreateInput {
   // Creator opt-in: require a human Turnstile token to reveal (ADR-0015),
   // default off. When off, the poof is revealable by a headless agent.
   requireTurnstile?: boolean;
+  // Creator opt-in: let any link-holder (the revealer) burn the poof early
+  // without the owner token (ADR-0016), default off.
+  allowViewerDelete?: boolean;
   // Creator preference for the recipient countdown (ADR-0014), default on.
   // Pass false to fold ClipMeta.showCountdown=false into the encrypted metadata
   // (e.g. the CLI --no-countdown flag). Omit to leave the default.
@@ -70,6 +73,7 @@ export async function create(http: HttpLike, baseUrl: string, input: CreateInput
     revealBudget: input.revealBudget,
     pin: input.pin,
     requireTurnstile: input.requireTurnstile,
+    allowViewerDelete: input.allowViewerDelete,
     turnstile: input.turnstile,
   });
   return { link: buildLink({ origin: baseUrl, id: serverId, key: master }), id: serverId, ownerToken };
@@ -83,6 +87,8 @@ export interface ClipInfo {
   // True when a human Turnstile token is required to reveal (ADR-0015). A
   // headless caller can use this to decide whether it can complete the reveal.
   turnstileRequired: boolean;
+  // True when the creator allowed viewer-initiated delete (ADR-0016).
+  allowViewerDelete: boolean;
   expiresAt?: number;
 }
 
@@ -91,7 +97,7 @@ export async function info(http: HttpLike, link: string): Promise<ClipInfo> {
   const { origin, id, key } = parseLink(link);
   const m = await getMeta(http, origin, id);
   if (!m.exists || !m.metadata)
-    return { exists: false, revealsRemaining: null, pinRequired: false, turnstileRequired: false };
+    return { exists: false, revealsRemaining: null, pinRequired: false, turnstileRequired: false, allowViewerDelete: false };
   let meta: ClipMeta | undefined;
   try {
     meta = JSON.parse(td.decode(await decryptBlob(key, id, "metadata", m.metadata))) as ClipMeta;
@@ -104,6 +110,7 @@ export async function info(http: HttpLike, link: string): Promise<ClipInfo> {
     revealsRemaining: m.revealsRemaining,
     pinRequired: m.pinRequired,
     turnstileRequired: m.turnstileRequired,
+    allowViewerDelete: m.allowViewerDelete,
     // Expiry now comes from the decrypted metadata, not a cleartext field (ADR-0014).
     expiresAt: meta?.expiresAt,
   };
@@ -145,12 +152,16 @@ export async function read(
   return { ok: true, content, meta };
 }
 
+// Early burn. With an owner token it is the owner-gated delete (ADR-0008); with
+// no token it is the viewer-initiated burn (ADR-0016), which the server honors
+// only when the creator set allowViewerDelete. Returns reason "forbidden" when
+// a tokenless burn is not allowed for this poof.
 export async function burn(
   http: HttpLike,
   linkOrId: string,
-  ownerToken: string,
+  ownerToken?: string,
   baseUrl?: string,
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; reason?: "forbidden" }> {
   let origin: string;
   let id: string;
   try {
@@ -162,5 +173,5 @@ export async function burn(
     origin = baseUrl;
     id = linkOrId;
   }
-  return deleteClip(http, origin, id, ownerToken);
+  return ownerToken ? deleteClip(http, origin, id, ownerToken) : burnAsViewer(http, origin, id);
 }

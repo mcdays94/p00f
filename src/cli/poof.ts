@@ -92,6 +92,9 @@ async function cmdCreate(a) {
   // --require-turnstile gates reveal behind a human captcha (ADR-0015). Default
   // off so the poof another agent receives stays revealable from the CLI/API.
   const requireTurnstile = a.flags["require-turnstile"] ? true : undefined;
+  // --viewer-delete lets any link-holder burn this poof early, with no owner
+  // token (ADR-0016). Default off.
+  const allowViewerDelete = a.flags["viewer-delete"] ? true : undefined;
 
   const created = await create(http, BASE, {
     content,
@@ -101,6 +104,7 @@ async function cmdCreate(a) {
     pin,
     showCountdown,
     requireTurnstile,
+    allowViewerDelete,
   });
 
   if (a.flags.json) {
@@ -143,16 +147,27 @@ async function cmdInfo(a) {
   }
   const reveals = i.revealsRemaining === null ? "unlimited" : String(i.revealsRemaining);
   process.stderr.write(
-    `kind: ${i.meta?.kind ?? "?"}\nreveals left: ${reveals}\npin required: ${i.pinRequired}\ncaptcha required: ${i.turnstileRequired}\n`,
+    `kind: ${i.meta?.kind ?? "?"}\nreveals left: ${reveals}\npin required: ${i.pinRequired}\ncaptcha required: ${i.turnstileRequired}\nviewer delete: ${i.allowViewerDelete}\n`,
   );
 }
 
 async function cmdBurn(a) {
   const link = a.positional[0];
   const token = typeof a.flags.token === "string" ? a.flags.token : undefined;
-  if (!link || !token) die("usage: poof burn <link> --token <ownerToken>", 2);
+  if (!link) die("usage: poof burn <link> [--token <ownerToken>]", 2);
+  // No token: viewer-initiated burn (ADR-0016), honored only if the creator
+  // allowed it. With a token: the owner-gated burn (ADR-0008).
   const b = await burn(http, link, token);
-  if (!b.ok) die("burn failed (wrong owner token or already gone)", 3);
+  if (!b.ok) {
+    if (b.reason === "forbidden")
+      die("this poof does not allow viewer delete; only the owner can burn it (pass --token)", 4);
+    die(
+      token
+        ? "burn failed (wrong owner token or already gone)"
+        : "burn failed (already gone, or viewer delete not allowed)",
+      3,
+    );
+  }
   process.stderr.write("burned. the link is now dead.\n");
 }
 

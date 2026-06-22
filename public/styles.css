@@ -37,12 +37,15 @@ body {
 .alpha-tag { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--coral); border: 1px solid var(--coral-dim); border-radius: 999px; padding: 3px 8px; line-height: 1; }
 .kicker, .panel-kicker { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .kicker { margin: 6px 0 0; }
-/* Rotating brand tagline under the masthead descriptor (a random TAGLINES line). */
-.masthead-tagline { font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; color: var(--coral-dim); margin: 4px 0 0; min-height: 1em; }
 .panel-kicker { color: var(--coral); margin: 0 0 14px; }
-/* Rotating tagline on the revealed panel (a random REVEAL_TAGLINES line), shown
-   just under the // revealed kicker. */
-.reveal-tagline { font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; color: var(--coral-dim); margin: -6px 0 16px; min-height: 1em; }
+/* Rotating tagline shown just under a panel kicker: a random TAGLINES line under
+   // your link once a poof is created, and a random REVEAL_TAGLINES line under
+   // revealed. */
+.reveal-tagline, .result-tagline { font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; color: var(--coral-dim); margin: -6px 0 16px; min-height: 1em; }
+/* Viewer-delete affordance on the revealed panel (ADR-0016), shown only when the
+   creator allowed it. The creator's own "delete now" lives in the result panel. */
+.viewer-delete { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.viewer-delete .muted { margin: 0 0 10px; }
 
 .page { display: flex; flex-direction: column; gap: 18px; }
 .panel { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }

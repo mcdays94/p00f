@@ -112,6 +112,9 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   // Opt-in reveal-Turnstile (ADR-0015): default off, so the poof stays
   // machine-revealable unless the creator asks for a human gate.
   const requireTurnstile = form.get("requireTurnstile") === "1";
+  // Opt-in viewer-delete (ADR-0016): default off, so a link-holder cannot burn
+  // the poof unless the creator allowed it.
+  const allowViewerDelete = form.get("allowViewerDelete") === "1";
 
   // The client generates the id so it can salt the key derivation with it
   // before uploading (ADR-0009). Fall back to a server id if absent (tests).
@@ -135,6 +138,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     size: content.size,
     pin,
     requireTurnstile,
+    allowViewerDelete,
     ownerHash,
     ownerSalt,
     inlineMax: Number(env.INLINE_MAX_BYTES) || INLINE_MAX_BYTES,
@@ -161,6 +165,17 @@ async function handleDelete(id: string, env: Env, request: Request): Promise<Res
   return json({ ok: false, reason: "forbidden" }, 403);
 }
 
+// Viewer-initiated burn (ADR-0016): no owner token. The DO only honors it when
+// the creator set allow_viewer_delete; otherwise it is forbidden. "gone" is
+// treated like the owner path: a calm 200 "already gone", since the destroy
+// intent is already satisfied.
+async function handleViewerBurn(id: string, env: Env): Promise<Response> {
+  const r = await env.CLIP.getByName(id).deleteByViewer();
+  if (r.ok) return json({ ok: true });
+  if (r.reason === "gone") return json({ ok: false, reason: "gone" });
+  return json({ ok: false, reason: "forbidden" }, 403);
+}
+
 async function handleMeta(id: string, env: Env): Promise<Response> {
   const m = await env.CLIP.getByName(id).getMeta();
   if (!m.exists) return json({ exists: false }, 404);
@@ -170,6 +185,7 @@ async function handleMeta(id: string, env: Env): Promise<Response> {
     revealsRemaining: m.revealsRemaining,
     pinRequired: m.pinRequired,
     turnstileRequired: m.turnstileRequired,
+    allowViewerDelete: m.allowViewerDelete,
     size: m.size,
   });
 }
@@ -186,6 +202,7 @@ async function handleEnvelope(id: string, env: Env): Promise<Response> {
       revealsRemaining: m.revealsRemaining,
       pinRequired: m.pinRequired,
       turnstileRequired: m.turnstileRequired,
+      allowViewerDelete: m.allowViewerDelete,
       size: m.size,
       metadata: m.metadata,
     }),
@@ -281,6 +298,11 @@ export default {
 
     const del = p.match(/^\/api\/clip\/([^/]+)\/delete$/);
     if (del && method === "POST") return harden(await handleDelete(del[1], env, request), { noStore: true });
+
+    // Viewer-initiated burn (ADR-0016): opt-in per clip, no owner token. Distinct
+    // from /delete (owner-gated) so the owner path stays unambiguous.
+    const vburn = p.match(/^\/api\/clip\/([^/]+)\/burn$/);
+    if (vburn && method === "POST") return harden(await handleViewerBurn(vburn[1], env), { noStore: true });
 
     if (p.startsWith("/api/")) return harden(new Response("Not found", { status: 404 }));
 

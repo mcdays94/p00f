@@ -30,7 +30,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 30px;
+    gap: 14px;
     font-family: var(--mono);
   }
   /* a soft coral glow behind the wordmark for depth */
@@ -66,26 +66,15 @@
     letter-spacing: -0.01em;
     color: var(--text);
   }
-  .tagline .poofs { color: var(--coral); }
-  .url {
-    position: absolute;
-    bottom: 40px;
-    left: 0;
-    right: 0;
-    text-align: center;
-    font-size: 22px;
-    letter-spacing: 0.18em;
-    color: var(--muted);
-  }
+  .tagline .accent { color: var(--coral); }
 </style>
 </head>
 <body>
   <div class="card">
     <div class="glow"></div>
-    <div class="kicker">zero-knowledge ephemeral clipboard</div>
-    <div class="wordmark">p00f<span class="dot">.</span></div>
-    <div class="tagline">Reveals, then <span class="poofs">poofs</span>.</div>
-    <div class="url">p00f.me</div>
+    <div class="kicker">the zero-knowledge ephemeral clipboard</div>
+    <div class="wordmark">p00f<span class="dot">.</span>me</div>
+    <div class="tagline">Now you see it. Soon you <span class="accent">won't</span>.</div>
   </div>
 </body>
 </html>

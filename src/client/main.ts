@@ -75,8 +75,9 @@ const SHARE_BLURBS = [
   "Top secret. This one actually self-destructs.",
 ];
 
-// Brand taglines for the "already vanished" moments: rotated at random under the
-// masthead on every visit and on the gone card. House style: no em-dashes.
+// Brand taglines for the "already vanished" moments: rotated at random on the
+// "// your link" result panel (once a poof is created) and on the gone card.
+// House style: no em-dashes.
 const TAGLINES = [
   "Shared in confidence, gone into oblivion.",
   "A one-way trip to oblivion.",
@@ -197,6 +198,7 @@ interface Prefs {
   budgetNum?: string;
   showCountdown?: boolean;
   requireTurnstile?: boolean;
+  allowViewerDelete?: boolean;
 }
 
 function readPrefs(): Prefs | null {
@@ -217,6 +219,7 @@ function currentPrefs(): Prefs {
     budgetNum: ($("#budget-num") as HTMLInputElement).value,
     showCountdown: ($("#show-countdown") as HTMLInputElement).checked,
     requireTurnstile: ($("#require-turnstile") as HTMLInputElement).checked,
+    allowViewerDelete: ($("#allow-viewer-delete") as HTMLInputElement).checked,
   };
 }
 
@@ -233,6 +236,7 @@ function applyPrefs(p: Prefs) {
   if (p.budgetNum) ($("#budget-num") as HTMLInputElement).value = p.budgetNum;
   if (typeof p.showCountdown === "boolean") ($("#show-countdown") as HTMLInputElement).checked = p.showCountdown;
   if (typeof p.requireTurnstile === "boolean") ($("#require-turnstile") as HTMLInputElement).checked = p.requireTurnstile;
+  if (typeof p.allowViewerDelete === "boolean") ($("#allow-viewer-delete") as HTMLInputElement).checked = p.allowViewerDelete;
   syncCustomFields();
 }
 
@@ -258,7 +262,7 @@ function setupPrefs() {
       /* storage blocked or full: persistence is best-effort */
     }
   };
-  ["#ttl", "#budget", "#ttl-num", "#ttl-unit", "#budget-num", "#show-countdown", "#require-turnstile"].forEach((sel) =>
+  ["#ttl", "#budget", "#ttl-num", "#ttl-unit", "#budget-num", "#show-countdown", "#require-turnstile", "#allow-viewer-delete"].forEach((sel) =>
     $(sel)?.addEventListener("change", persistIfOn),
   );
   remember.addEventListener("change", () => {
@@ -277,6 +281,7 @@ function setupPrefs() {
     syncCustomFields();
     ($("#show-countdown") as HTMLInputElement).checked = true;
     ($("#require-turnstile") as HTMLInputElement).checked = false;
+    ($("#allow-viewer-delete") as HTMLInputElement).checked = false;
     remember.checked = false;
     try {
       localStorage.removeItem(PREFS_KEY);
@@ -655,6 +660,9 @@ async function doCreate() {
   // Creator's opt-in to require a captcha on reveal (ADR-0015), default off. When
   // off, the poof stays revealable by an agent / the machine path.
   const requireTurnstile = ($("#require-turnstile") as HTMLInputElement | null)?.checked ?? false;
+  // Creator's opt-in to let any link-holder burn the poof after revealing
+  // (ADR-0016), default off.
+  const allowViewerDelete = ($("#allow-viewer-delete") as HTMLInputElement | null)?.checked ?? false;
 
   btn.disabled = true;
   show($("#create-error"), false);
@@ -681,6 +689,7 @@ async function doCreate() {
     fd.set("revealBudget", String(revealBudget));
     if (pin) fd.set("pin", pin);
     if (requireTurnstile) fd.set("requireTurnstile", "1");
+    if (allowViewerDelete) fd.set("allowViewerDelete", "1");
     fd.set("meta", new Blob([metaCipher]));
     fd.set("content", new Blob([contentCipher]));
 
@@ -702,6 +711,7 @@ async function doCreate() {
     await minPoof;
     btnCtl?.stopRing();
     show($("#composer"), false);
+    setTagline("#result-tagline");
     show($("#result"), true);
   } catch (err) {
     btnCtl?.stopRing();
@@ -777,6 +787,41 @@ function startCountdown(id: string, expiresAt: number, showBar: boolean) {
   tick();
 }
 
+// Viewer-initiated delete (ADR-0016): wired on the revealed panel only when the
+// creator allowed it. Burns the poof for everyone via the no-owner-token /burn
+// endpoint, which the server gates on the creator's opt-in. The current viewer
+// has already seen the content; this just destroys it for anyone else.
+function setupViewerDelete(id: string): void {
+  const row = $("#viewer-delete-row");
+  const btn = $("#viewer-delete") as HTMLButtonElement;
+  const status = $("#viewer-delete-status");
+  show(row, true);
+  if (btn.dataset.wired === "1") return;
+  btn.dataset.wired = "1";
+  btn.addEventListener("click", () => {
+    void (async () => {
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/clip/${id}/burn`, { method: "POST" });
+        if (res.ok) {
+          status.textContent = "burned. gone for everyone now.";
+          sessionCache.delete(id);
+        } else if (res.status === 403) {
+          status.textContent = "this poof does not allow viewer delete.";
+          btn.disabled = false;
+        } else {
+          status.textContent = "delete failed.";
+          btn.disabled = false;
+        }
+      } catch {
+        status.textContent = "delete failed.";
+        btn.disabled = false;
+      }
+      show(status, true);
+    })();
+  });
+}
+
 async function initReveal(id: string, keyStr: string) {
   show($("#reveal-page"), true);
   if (!keyStr) return showGone();
@@ -802,9 +847,11 @@ async function initReveal(id: string, keyStr: string) {
     revealsRemaining: number | null;
     pinRequired: boolean;
     turnstileRequired?: boolean;
+    allowViewerDelete?: boolean;
   };
   if (!data.exists) return showGone();
   const turnstileRequired = data.turnstileRequired === true;
+  const allowViewerDelete = data.allowViewerDelete === true;
 
   let meta: ClipMeta;
   try {
@@ -836,7 +883,7 @@ async function initReveal(id: string, keyStr: string) {
   // measures the real button box. Same animation as create ("$ poof get").
   revealCtl = setupPoofButton("#reveal-btn", "reveal poof", "$ poof get");
   $("#reveal-btn").addEventListener("click", () =>
-    void doReveal(id, master, meta, data.pinRequired, turnstileRequired),
+    void doReveal(id, master, meta, data.pinRequired, turnstileRequired, allowViewerDelete),
   );
 }
 
@@ -846,6 +893,7 @@ async function doReveal(
   meta: ClipMeta,
   pinRequired: boolean,
   turnstileRequired: boolean,
+  allowViewerDelete: boolean,
 ) {
   const btn = $("#reveal-btn") as HTMLButtonElement;
   if (btn.disabled) return;
@@ -912,6 +960,7 @@ async function doReveal(
     // a fill-mode the base opacity (1) governs if the animation never runs.
     const revealed = $("#revealed");
     setTagline("#reveal-tagline", REVEAL_TAGLINES);
+    if (allowViewerDelete) setupViewerDelete(id);
     revealed.classList.add("materialize");
     show(revealed, true);
   } catch {
@@ -1114,7 +1163,6 @@ function renderContent(bytes: Uint8Array, meta: ClipMeta) {
 // ---------------- router ----------------
 
 function main() {
-  setTagline("#masthead-tagline");
   const m = location.pathname.match(/^\/c\/([^/]+)$/);
   if (m) {
     void initReveal(m[1], location.hash.slice(1));

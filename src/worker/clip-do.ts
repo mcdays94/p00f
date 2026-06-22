@@ -16,6 +16,9 @@ export interface CreateInput {
   // Default false, so a poof is revealable by anyone with the link, including a
   // headless agent (and a PIN poof is revealable by an agent that has the PIN).
   requireTurnstile?: boolean;
+  // Creator opt-in: allow any link-holder (the revealer) to burn the poof early,
+  // without the owner token (ADR-0016). Default false; enforced server-side.
+  allowViewerDelete?: boolean;
   ownerHash?: string;
   ownerSalt?: string;
   inlineMax?: number; // content larger than this goes to R2
@@ -29,6 +32,7 @@ export type MetaResult =
       revealsRemaining: number | null; // null = unlimited
       pinRequired: boolean;
       turnstileRequired: boolean;
+      allowViewerDelete: boolean;
       size: number;
     };
 
@@ -64,6 +68,7 @@ interface Row {
   owner_hash: string | null;
   owner_salt: string | null;
   require_turnstile: number;
+  allow_viewer_delete: number;
 }
 
 const SCHEMA = `
@@ -84,7 +89,8 @@ const SCHEMA = `
     locked_until INTEGER NOT NULL DEFAULT 0,
     owner_hash TEXT,
     owner_salt TEXT,
-    require_turnstile INTEGER NOT NULL DEFAULT 0
+    require_turnstile INTEGER NOT NULL DEFAULT 0,
+    allow_viewer_delete INTEGER NOT NULL DEFAULT 0
   )
 `;
 
@@ -108,6 +114,15 @@ export class ClipDO extends DurableObject<Env> {
     } catch (e) {
       if (!(e instanceof Error && /duplicate column/i.test(e.message))) throw e;
     }
+    // Additive migration (ADR-0016): viewer-delete opt-in column, same idempotent
+    // ADD COLUMN guard. Clips created before it default to 0 (not allowed).
+    try {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE clip ADD COLUMN allow_viewer_delete INTEGER NOT NULL DEFAULT 0",
+      );
+    } catch (e) {
+      if (!(e instanceof Error && /duplicate column/i.test(e.message))) throw e;
+    }
   }
 
   // Reads the single clip row. Resilient to the table being dropped by a prior
@@ -116,7 +131,7 @@ export class ClipDO extends DurableObject<Env> {
     try {
       const rows = this.ctx.storage.sql
         .exec<Row>(
-          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt, require_turnstile FROM clip WHERE id = 1",
+          "SELECT expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, pin_attempts, locked_until, owner_hash, owner_salt, require_turnstile, allow_viewer_delete FROM clip WHERE id = 1",
         )
         .toArray();
       return rows.length ? rows[0] : null;
@@ -152,7 +167,7 @@ export class ClipDO extends DurableObject<Env> {
     }
 
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt, require_turnstile) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO clip (id, created_at, expires_at, reveal_budget, reveals_used, size, metadata, content, r2_key, pin_hash, pin_salt, pin_iters, owner_hash, owner_salt, require_turnstile, allow_viewer_delete) VALUES (1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       now,
       expiresAt,
       input.revealBudget,
@@ -166,6 +181,7 @@ export class ClipDO extends DurableObject<Env> {
       input.ownerHash ?? null,
       input.ownerSalt ?? null,
       input.requireTurnstile ? 1 : 0,
+      input.allowViewerDelete ? 1 : 0,
     );
     await this.ctx.storage.setAlarm(expiresAt);
     return { ok: true };
@@ -193,6 +209,7 @@ export class ClipDO extends DurableObject<Env> {
       revealsRemaining,
       pinRequired: row.pin_hash != null,
       turnstileRequired: row.require_turnstile === 1,
+      allowViewerDelete: row.allow_viewer_delete === 1,
       size: row.size,
     };
   }
@@ -273,6 +290,19 @@ export class ClipDO extends DurableObject<Env> {
     if (!row.owner_hash || !row.owner_salt) return { ok: false, reason: "forbidden" };
     const candidate = await sha256B64(row.owner_salt + token);
     if (candidate !== row.owner_hash) return { ok: false, reason: "forbidden" };
+    await this.burn();
+    return { ok: true };
+  }
+
+  // Viewer-initiated early burn (ADR-0016), opt-in per clip and default off. A
+  // link-holder has no owner token, so this is gated solely by the creator's
+  // allow_viewer_delete flag: when unset the burn is forbidden, so holding the
+  // link does not by itself grant destruction (consistent with ADR-0008). A
+  // missing row is "gone" (already destroyed), not an error.
+  async deleteByViewer(): Promise<DeleteResult> {
+    const row = this.row();
+    if (!row) return { ok: false, reason: "gone" };
+    if (row.allow_viewer_delete !== 1) return { ok: false, reason: "forbidden" };
     await this.burn();
     return { ok: true };
   }

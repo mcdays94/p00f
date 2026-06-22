@@ -28,11 +28,26 @@ describe("wire format contract", () => {
     // turnstileRequired is a cleartext signal so a caller knows up front whether
     // it can reveal headlessly; it defaults to false (ADR-0015).
     expect(env.turnstileRequired).toBe(false);
+    // allowViewerDelete is a cleartext policy signal (ADR-0016), default false.
+    expect(env.allowViewerDelete).toBe(false);
     // The exact size is never a cleartext field; only the coarse bucket is.
     expect(env).not.toHaveProperty("size");
     // The expiry deadline moved into the encrypted metadata (ADR-0014); it must
     // not appear as a cleartext envelope field.
     expect(env).not.toHaveProperty("expiresAt");
+  });
+
+  it("marks allowViewerDelete in the envelope when the creator opted in (ADR-0016)", () => {
+    const env = buildEnvelope({
+      id: "x",
+      revealsRemaining: null,
+      pinRequired: false,
+      allowViewerDelete: true,
+      size: 1,
+      metadata: new Uint8Array([1]),
+    });
+    expect(env.allowViewerDelete).toBe(true);
+    expect(WIRE_FORMAT.envelope.cleartext).toContain("allowViewerDelete");
   });
 
   it("publishes the same HKDF info strings the crypto derivation uses", () => {
