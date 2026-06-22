@@ -75,20 +75,22 @@ const SHARE_BLURBS = [
   "Top secret. This one actually self-destructs.",
 ];
 
-// Brand taglines, rotated at random so the vibe stays fresh. The theme is the
-// vanishing act: a poof is shared, then it is gone. Shown under the masthead on
-// every visit and on the "gone" card. House style: no em-dashes.
+// Brand taglines for the "already vanished" moments: rotated at random under the
+// masthead on every visit and on the gone card. House style: no em-dashes.
 const TAGLINES = [
   "Shared in confidence, gone into oblivion.",
-  "Encrypted here, headed for oblivion.",
   "A one-way trip to oblivion.",
-  "Now you see it. Soon you won't.",
   "Built to be forgotten.",
 ];
 
-function setTagline(selector: string): void {
+// Shown on the revealed panel: you are looking at the content now, and it is on
+// its way out. Kept separate from TAGLINES because it only fits a live reveal,
+// not a poof that is already gone.
+const REVEAL_TAGLINES = ["Now you see it. Soon you won't."];
+
+function setTagline(selector: string, pool: readonly string[] = TAGLINES): void {
   const el = document.querySelector(selector);
-  if (el) el.textContent = TAGLINES[(Math.random() * TAGLINES.length) | 0];
+  if (el) el.textContent = pool[(Math.random() * pool.length) | 0];
 }
 
 // Native share sheet for the generated link (great on mobile). Falls back to a
@@ -105,24 +107,21 @@ async function shareLink(): Promise<void> {
   }
 }
 
-// Turnstile auto-hide (#23): once solved, collapse the widget and show a compact
-// "verified" note; re-show on expiry/error so it can be re-solved. Turnstile uses
-// implicit rendering and calls these handlers by name, so they live on window.
-function collapseTs(widgetSel: string, okSel: string): void {
+// Turnstile auto-hide (#23): once solved, collapse the widget to nothing and
+// leave no note behind (the row margin collapses via CSS :has for a clean UI);
+// re-show on expiry/error so it can be re-solved. Turnstile uses implicit
+// rendering and calls these handlers by name, so they live on window.
+function collapseTs(widgetSel: string): void {
   $(widgetSel)?.classList.add("ts-solved");
-  const ok = $(okSel);
-  if (ok) ok.hidden = false;
 }
-function expandTs(widgetSel: string, okSel: string): void {
+function expandTs(widgetSel: string): void {
   $(widgetSel)?.classList.remove("ts-solved");
-  const ok = $(okSel);
-  if (ok) ok.hidden = true;
 }
 const tsWin = window as unknown as Record<string, () => void>;
-tsWin.onTsCreate = () => collapseTs("#ts-widget", "#ts-ok");
-tsWin.onTsCreateExpired = () => expandTs("#ts-widget", "#ts-ok");
-tsWin.onTsReveal = () => collapseTs("#reveal-ts", "#reveal-ts-ok");
-tsWin.onTsRevealExpired = () => expandTs("#reveal-ts", "#reveal-ts-ok");
+tsWin.onTsCreate = () => collapseTs("#ts-widget");
+tsWin.onTsCreateExpired = () => expandTs("#ts-widget");
+tsWin.onTsReveal = () => collapseTs("#reveal-ts");
+tsWin.onTsRevealExpired = () => expandTs("#reveal-ts");
 
 // ---------------- create ----------------
 
@@ -912,6 +911,7 @@ async function doReveal(
     // starts cleanly from display:none -> block (no first-frame flash). Without
     // a fill-mode the base opacity (1) governs if the animation never runs.
     const revealed = $("#revealed");
+    setTagline("#reveal-tagline", REVEAL_TAGLINES);
     revealed.classList.add("materialize");
     show(revealed, true);
   } catch {

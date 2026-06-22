@@ -118,7 +118,6 @@
 
         <div class="ts-row">
           <div id="ts-widget" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark" data-callback="onTsCreate" data-expired-callback="onTsCreateExpired" data-error-callback="onTsCreateExpired"></div>
-          <p id="ts-ok" class="ts-ok" hidden>human verified ✓</p>
         </div>
 
         <button id="create-btn" class="poof-btn" data-testid="create-btn" disabled aria-label="create poof">
@@ -162,7 +161,6 @@
         </div>
         <div id="reveal-ts-wrap" hidden>
           <div id="reveal-ts" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark" data-callback="onTsReveal" data-expired-callback="onTsRevealExpired" data-error-callback="onTsRevealExpired"></div>
-          <p id="reveal-ts-ok" class="ts-ok" hidden>human verified ✓</p>
         </div>
         <button id="reveal-btn" class="poof-btn" data-testid="reveal-btn" aria-label="reveal poof">
           <canvas class="poof-field" aria-hidden="true"></canvas>
@@ -176,6 +174,7 @@
 
       <div id="revealed" class="panel" hidden>
         <p class="panel-kicker">// revealed</p>
+        <p class="reveal-tagline" id="reveal-tagline"></p>
         <div id="content" class="content" data-testid="content"></div>
         <div class="reveal-cta">
           <a class="btn ghost" href="/">create your own poof</a>
