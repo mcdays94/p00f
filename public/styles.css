@@ -37,6 +37,8 @@ body {
 .alpha-tag { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--coral); border: 1px solid var(--coral-dim); border-radius: 999px; padding: 3px 8px; line-height: 1; }
 .kicker, .panel-kicker { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .kicker { margin: 6px 0 0; }
+/* Rotating brand tagline under the masthead descriptor (a random TAGLINES line). */
+.masthead-tagline { font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; color: var(--coral-dim); margin: 4px 0 0; min-height: 1em; }
 .panel-kicker { color: var(--coral); margin: 0 0 14px; }
 
 .page { display: flex; flex-direction: column; gap: 18px; }
@@ -209,6 +211,9 @@ select:focus { outline: none; border-color: var(--coral); }
 .actions { display: flex; gap: 8px; margin-top: 12px; }
 .gone { text-align: center; }
 .poof { font-size: 28px; font-weight: 700; color: var(--coral); letter-spacing: -0.02em; margin: 6px 0; }
+/* Rotating tagline on the gone card (a random TAGLINES line); the poetic line
+   above the factual muted explainer. */
+.oblivion { font-family: var(--mono); font-size: 15px; color: var(--text); letter-spacing: -0.01em; margin: 4px 0 10px; min-height: 1em; }
 .pin-input { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--mono); font-size: 14px; letter-spacing: 0.1em; width: 12em; }
 .pin-input:focus { outline: none; border-color: var(--coral); }
 #pin-entry { margin: 14px 0; display: flex; flex-direction: column; gap: 10px; }

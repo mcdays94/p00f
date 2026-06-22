@@ -75,6 +75,22 @@ const SHARE_BLURBS = [
   "Top secret. This one actually self-destructs.",
 ];
 
+// Brand taglines, rotated at random so the vibe stays fresh. The theme is the
+// vanishing act: a poof is shared, then it is gone. Shown under the masthead on
+// every visit and on the "gone" card. House style: no em-dashes.
+const TAGLINES = [
+  "Shared in confidence, gone into oblivion.",
+  "Encrypted here, headed for oblivion.",
+  "A one-way trip to oblivion.",
+  "Now you see it. Soon you won't.",
+  "Built to be forgotten.",
+];
+
+function setTagline(selector: string): void {
+  const el = document.querySelector(selector);
+  if (el) el.textContent = TAGLINES[(Math.random() * TAGLINES.length) | 0];
+}
+
 // Native share sheet for the generated link (great on mobile). Falls back to a
 // copy if the user cancels or the platform rejects the payload. Only the link
 // is shared; the Fragment Key is in the link, so anyone shared-with can decrypt.
@@ -702,6 +718,7 @@ async function doCreate() {
 const sessionCache = new Map<string, Uint8Array>();
 
 function showGone() {
+  setTagline("#gone-tagline");
   show($("#precard"), false);
   show($("#revealed"), false);
   show($("#gone"), true);
@@ -1097,6 +1114,7 @@ function renderContent(bytes: Uint8Array, meta: ClipMeta) {
 // ---------------- router ----------------
 
 function main() {
+  setTagline("#masthead-tagline");
   const m = location.pathname.match(/^\/c\/([^/]+)$/);
   if (m) {
     void initReveal(m[1], location.hash.slice(1));
