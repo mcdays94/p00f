@@ -51,6 +51,8 @@ describe("wire format contract", () => {
     // The byte limits are published so an agent can size an upload up front.
     expect(d.limits.maxClipBytes).toBeGreaterThan(0);
     expect(d.limits.inlineMaxBytes).toBeGreaterThan(0);
+    // Agents arriving over HTTP are pointed at the official CLI as the easy path.
+    expect(d.cli).toContain("@p00f/cli");
   });
 
   it("renders llms.txt with the decryptable wire format and the fragment rule", () => {
@@ -61,6 +63,8 @@ describe("wire format contract", () => {
     expect(txt).toContain("poof/content/v1");
     expect(txt).toContain("fragment");
     expect(txt).toContain("Max content size");
+    // HTTP agents are taught the CLI as the easiest reveal path (#24).
+    expect(txt).toContain("npx @p00f/cli");
     // No em-dashes in published content (house rule).
     expect(txt).not.toContain("\u2014");
   });

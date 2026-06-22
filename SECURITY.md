@@ -4,10 +4,10 @@ p00f is a zero-knowledge, ephemeral clipboard and agent-handoff tool. This docum
 
 ## Trust model
 
-- **Zero-knowledge.** Every Clip is encrypted in the caller (browser, CLI, or MCP server) with AES-GCM-256 before upload. The decryption key (the Fragment Key) lives only in the URL fragment (`#...`), which clients never send to a server. The hosted API, Cloudflare, and anyone who breaches storage only ever hold ciphertext. See `docs/adr/0001-zero-knowledge-trust-model.md`.
+- **Zero-knowledge.** Every Clip is encrypted in the caller (browser or CLI) with AES-GCM-256 before upload. The decryption key (the Fragment Key) lives only in the URL fragment (`#...`), which clients never send to a server. The hosted API, Cloudflare, and anyone who breaches storage only ever hold ciphertext. See `docs/adr/0001-zero-knowledge-trust-model.md`.
 - **The Link is the secret.** Possession of the full Link (the clip id in the path plus the Fragment Key in the fragment) is what decrypts a Clip. Treat a Link like a password.
 - **Ephemeral by default.** A Clip burns when its TTL expires or its reveal budget reaches zero, whichever comes first (`docs/adr/0002-clip-lifecycle.md`).
-- **One core, many shells.** The same audited crypto runs in the web app, the `poof` CLI, the local MCP server, and a Code Mode module. The hosted API is a ciphertext-only relay (`docs/adr/0010-agent-machine-integration.md`).
+- **One core, many shells.** The same audited crypto runs in the web app and the `poof` CLI. The hosted API is a ciphertext-only relay (`docs/adr/0010-agent-machine-integration.md`).
 
 ## What is NOT protected (be honest with yourself)
 

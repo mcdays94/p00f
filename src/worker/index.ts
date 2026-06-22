@@ -95,7 +95,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   }
 
   // Browser path: a valid Turnstile token lifts the caller above the floor.
-  // Machine path (CLI, MCP, agents): no human to solve Turnstile, so anonymous
+  // Machine path (CLI, agents): no human to solve Turnstile, so anonymous
   // create is allowed under the identity-free rate-limit floor (ADR-0011).
   const ip = request.headers.get("CF-Connecting-IP");
   const token = form.get("turnstile");

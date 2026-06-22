@@ -1,0 +1,41 @@
+{
+  "name": "@p00f/cli",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "The p00f command-line interface. `poof` shares a file, text, or piped stdin as a zero-knowledge, expiring link, and reveals or burns one. All encryption is caller-side, so the hosted service only ever sees ciphertext. Defaults to the hosted app at https://p00f.me.",
+  "type": "module",
+  "bin": {
+    "poof": "dist/poof.mjs"
+  },
+  "files": ["dist", "README.md"],
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "author": "mcdays94 <amtccdias@gmail.com>",
+  "homepage": "https://github.com/mcdays94/p00f#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mcdays94/p00f.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/mcdays94/p00f/issues"
+  },
+  "keywords": [
+    "zero-knowledge",
+    "end-to-end-encryption",
+    "ephemeral",
+    "clipboard",
+    "cli",
+    "command-line",
+    "aes-gcm",
+    "agents"
+  ],
+  "scripts": {
+    "build": "esbuild ../../src/cli/poof.ts --bundle --platform=node --format=esm --outfile=dist/poof.mjs --banner:js='#!/usr/bin/env node'",
+    "prepublishOnly": "npm run build"
+  }
+}

@@ -7,12 +7,10 @@
     "dev": "npm run build:client && wrangler dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:cli": "esbuild src/cli/poof.ts --bundle --platform=node --format=esm --outfile=bin/poof.mjs --banner:js='#!/usr/bin/env node'",
-    "build:mcp": "esbuild src/mcp/server.ts --bundle --platform=node --format=esm --outfile=bin/poof-mcp.mjs --banner:js='#!/usr/bin/env node'"
+    "build:cli": "esbuild src/cli/poof.ts --bundle --platform=node --format=esm --outfile=bin/poof.mjs --banner:js='#!/usr/bin/env node'"
   },
   "bin": {
-    "poof": "bin/poof.mjs",
-    "poof-mcp": "bin/poof-mcp.mjs"
+    "poof": "bin/poof.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.18",
@@ -21,9 +19,5 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
     "wrangler": "^4.103.0"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^4.4.3"
   }
 }

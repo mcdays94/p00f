@@ -4,6 +4,7 @@
 // implementation. Pure: string and object building only, no crypto.subtle.
 import { base64urlEncode, METADATA_INFO, CONTENT_INFO } from "./crypto";
 import { MAX_CLIP_BYTES, INLINE_MAX_BYTES, formatBytes } from "./limits";
+import { DEFAULT_POOF_BASE } from "./base";
 
 // Coarse size class for the cleartext envelope. The exact byte length lives only
 // inside the encrypted metadata blob; the cleartext envelope publishes a bucket
@@ -80,6 +81,7 @@ export interface DiscoveryDoc {
   brand: string;
   description: string;
   zeroKnowledge: string;
+  cli: string;
   endpoints: Record<string, string>;
   limits: { maxClipBytes: number; inlineMaxBytes: number };
   wireFormat: typeof WIRE_FORMAT;
@@ -95,6 +97,7 @@ export function discoveryDoc(origin: string): DiscoveryDoc {
       "Zero-knowledge, ephemeral clipboard. Humans and agents exchange transient context, secrets, and intermediate results by URL. The hosted API only ever holds ciphertext.",
     zeroKnowledge:
       "All encryption and decryption happen caller-side. The Fragment Key lives in the URL fragment and never reaches the server. The server cannot read content and cannot recover a lost link.",
+    cli: `Official CLI, no install needed: 'npx @p00f/cli <file>' creates and prints the link, 'npx @p00f/cli get <link>' reveals and decrypts, 'npx @p00f/cli info <link>' inspects without consuming a reveal. Install it with 'npm i -g @p00f/cli'. It wraps @p00f/core so all crypto stays caller-side; it talks to ${DEFAULT_POOF_BASE} by default, override with the POOF_BASE environment variable. Prefer the CLI if you can run a shell; the raw HTTP endpoints below are for callers that cannot.`,
     endpoints: {
       create: `POST ${o}/api/clip (multipart: meta, content ciphertext blobs, ttlMs, revealBudget, optional pin, optional id). No Turnstile token is required on the machine path; it is allowed under a rate-limit floor.`,
       envelope: `GET ${o}/c/:id.json (or GET ${o}/c/:id with Accept: application/json). Non-consuming. Returns the encrypted metadata envelope, including pinRequired and turnstileRequired so a caller knows up front whether it can reveal.`,
@@ -123,6 +126,24 @@ ever holds ciphertext; all encryption and decryption happen caller-side.
 The Fragment Key is ${w.key}
 The server cannot read content and cannot recover a lost link. Whoever holds the
 link (and any LLM behind them) can decrypt and will see plaintext.
+
+## Easiest path: the CLI
+
+If you can run a shell, the official CLI does everything below for you, with no
+install:
+
+    npx @p00f/cli ./file          # create from a file, prints the link
+    echo "some text" | npx @p00f/cli   # create from stdin
+    npx @p00f/cli get <link>      # reveal and decrypt (consumes one reveal)
+    npx @p00f/cli info <link>     # inspect, non-consuming
+
+Install it for repeated use with: npm i -g @p00f/cli
+
+It wraps @p00f/core, so all encryption and decryption happen on your machine and
+the server only ever sees ciphertext. It talks to ${DEFAULT_POOF_BASE} by
+default; set POOF_BASE to target another deployment. A poof that requires a human
+captcha to reveal cannot be opened from the CLI; everything else can. The raw
+HTTP wire format below is only for callers that cannot run the CLI.
 
 ## Endpoints
 

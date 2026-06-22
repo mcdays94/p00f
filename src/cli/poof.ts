@@ -8,12 +8,13 @@ import { basename } from "node:path";
 import { create, read, info, burn } from "../shared/core";
 import { parseArgs, ttlToMs, readsToBudget, inferKind } from "./args";
 import { MAX_CLIP_BYTES, formatBytes } from "../shared/limits";
+import { resolveBase } from "../shared/base";
 import { webcrypto } from "node:crypto";
 
 // Node 18 does not expose Web Crypto as a global; @p00f/core relies on it.
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
-const BASE = process.env.POOF_BASE || process.env.P00F_BASE || "https://poof.localhost";
+const BASE = resolveBase(process.env);
 const http = (u, init) => fetch(u, init);
 
 function die(msg, code) {
