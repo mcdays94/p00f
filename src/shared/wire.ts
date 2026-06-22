@@ -3,7 +3,7 @@
 // so a non-SDK caller can implement decryption. @p00f/core is the reference
 // implementation. Pure: string and object building only, no crypto.subtle.
 import { base64urlEncode, METADATA_INFO, CONTENT_INFO } from "./crypto";
-import { MAX_CLIP_BYTES, INLINE_MAX_BYTES, formatBytes } from "./limits";
+import { MAX_CLIP_BYTES, INLINE_MAX_BYTES, MAX_TTL_MS, MAX_REVEAL_BUDGET, formatBytes } from "./limits";
 
 // Coarse size class for the cleartext envelope. The exact byte length lives only
 // inside the encrypted metadata blob; the cleartext envelope publishes a bucket
@@ -81,7 +81,7 @@ export interface DiscoveryDoc {
   description: string;
   zeroKnowledge: string;
   endpoints: Record<string, string>;
-  limits: { maxClipBytes: number; inlineMaxBytes: number };
+  limits: { maxClipBytes: number; inlineMaxBytes: number; maxTtlMs: number; maxRevealBudget: number };
   wireFormat: typeof WIRE_FORMAT;
   reference: string;
 }
@@ -103,7 +103,7 @@ export function discoveryDoc(origin: string): DiscoveryDoc {
       delete: `POST ${o}/api/clip/:id/delete (body: { ownerToken }). Owner-gated early burn.`,
       health: `GET ${o}/health`,
     },
-    limits: { maxClipBytes: MAX_CLIP_BYTES, inlineMaxBytes: INLINE_MAX_BYTES },
+    limits: { maxClipBytes: MAX_CLIP_BYTES, inlineMaxBytes: INLINE_MAX_BYTES, maxTtlMs: MAX_TTL_MS, maxRevealBudget: MAX_REVEAL_BUDGET },
     wireFormat: WIRE_FORMAT,
     reference: "@p00f/core is the supported reference implementation of this wire format.",
   };
@@ -147,6 +147,8 @@ link (and any LLM behind them) can decrypt and will see plaintext.
 
 - Max content size per poof: ${formatBytes(MAX_CLIP_BYTES)} (encrypted blob). An
   oversized create is rejected with HTTP 413 { error: "too_large", maxBytes }.
+- TTL: any value up to ${Math.round(MAX_TTL_MS / 86_400_000)} days (custom, not only presets).
+  Reveal budget: 1 to ${MAX_REVEAL_BUDGET}, or unlimited (-1).
 
 ## Wire format
 

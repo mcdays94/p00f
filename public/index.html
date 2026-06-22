@@ -44,7 +44,18 @@
               <option value="3600000">1 hour</option>
               <option value="86400000">1 day</option>
               <option value="604800000">7 days</option>
+              <option value="custom">custom…</option>
             </select>
+          </label>
+          <label id="ttl-custom-wrap" hidden>custom expiry
+            <span class="custom-row">
+              <input id="ttl-num" class="num-input" type="number" min="1" value="1" data-testid="ttl-num" />
+              <select id="ttl-unit" data-testid="ttl-unit">
+                <option value="60000">minutes</option>
+                <option value="3600000">hours</option>
+                <option value="86400000" selected>days</option>
+              </select>
+            </span>
           </label>
           <label>or after
             <select id="budget">
@@ -52,7 +63,11 @@
               <option value="3">3 reveals</option>
               <option value="10">10 reveals</option>
               <option value="-1">unlimited reveals</option>
+              <option value="custom">custom…</option>
             </select>
+          </label>
+          <label id="budget-custom-wrap" hidden>custom reveals
+            <input id="budget-num" class="num-input" type="number" min="1" max="100" value="5" data-testid="budget-num" />
           </label>
           <div id="ts-widget" class="cf-turnstile" data-sitekey="0x4AAAAAADoSZGifs5Tl0B0R" data-theme="dark"></div>
         </div>

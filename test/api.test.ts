@@ -139,4 +139,16 @@ describe("Worker API", () => {
     expect(ok.status).toBe(200);
     expect((await SELF.fetch(`${base}/api/clip/${id}/meta`)).status).toBe(404);
   });
+
+  it("honors a custom reveal budget and clamps over-max (#22)", async () => {
+    const cr = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: createForm({ revealBudget: 5 }) });
+    const { id } = (await cr.json()) as { id: string };
+    const meta = (await (await SELF.fetch(`${base}/api/clip/${id}/meta`)).json()) as { revealsRemaining: number };
+    expect(meta.revealsRemaining).toBe(5);
+
+    const cr2 = await SELF.fetch(`${base}/api/clip`, { method: "POST", body: createForm({ revealBudget: 99999 }) });
+    const { id: id2 } = (await cr2.json()) as { id: string };
+    const meta2 = (await (await SELF.fetch(`${base}/api/clip/${id2}/meta`)).json()) as { revealsRemaining: number };
+    expect(meta2.revealsRemaining).toBe(100);
+  });
 });

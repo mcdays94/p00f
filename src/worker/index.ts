@@ -2,7 +2,7 @@ import { ClipDO } from "./clip-do";
 import type { Env } from "./types";
 import { generateClipId, base64urlEncode, generateOwnerToken } from "../shared/crypto";
 import { isValidPin } from "../shared/pin";
-import { MAX_CLIP_BYTES, INLINE_MAX_BYTES } from "../shared/limits";
+import { MAX_CLIP_BYTES, INLINE_MAX_BYTES, clampTtlMs, clampRevealBudget } from "../shared/limits";
 import { buildEnvelope, discoveryDoc, llmsTxt } from "../shared/wire";
 import { SANDBOX_HTML, SANDBOX_CSP } from "../shared/sandbox-doc";
 import { verifyTurnstile } from "./turnstile";
@@ -10,12 +10,6 @@ import { sha256B64, randomSaltB64 } from "./hash";
 
 export { ClipDO };
 export type { Env };
-
-const MINUTE = 60_000;
-const ALLOWED_TTL_MS = [5 * MINUTE, 60 * MINUTE, 24 * 60 * MINUTE, 7 * 24 * 60 * MINUTE];
-const DEFAULT_TTL_MS = 5 * MINUTE;
-const ALLOWED_BUDGET = [1, 3, 10, -1];
-const DEFAULT_BUDGET = 1;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -69,13 +63,6 @@ function harden(res: Response, opts: { noStore?: boolean; vary?: boolean } = {})
   return new Response(res.status === 204 ? null : res.body, { status: res.status, headers: h });
 }
 
-function clampTtl(v: number): number {
-  return ALLOWED_TTL_MS.includes(v) ? v : DEFAULT_TTL_MS;
-}
-function clampBudget(v: number): number {
-  return ALLOWED_BUDGET.includes(v) ? v : DEFAULT_BUDGET;
-}
-
 // Identity-free rate-limit floor for the machine path (ADR-0011). Uses the GA
 // Workers ratelimit binding when configured; if absent, allows (a self-hoster
 // adds the binding). Enforced per data center, so it is a floor, not a hard cap.
@@ -116,8 +103,8 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   const maxBytes = Number(env.MAX_CLIP_BYTES) || MAX_CLIP_BYTES;
   if (content.size > maxBytes) return json({ error: "too_large", maxBytes }, 413);
 
-  const ttlMs = clampTtl(Number(form.get("ttlMs")));
-  const revealBudget = clampBudget(Number(form.get("revealBudget")));
+  const ttlMs = clampTtlMs(Number(form.get("ttlMs")));
+  const revealBudget = clampRevealBudget(Number(form.get("revealBudget")));
   // Variable-length PIN or password (ADR-0004): the length floor/cap is the only
   // server-side shape check; the DO hashes whatever it stores with PBKDF2.
   const pinRaw = form.get("pin");
