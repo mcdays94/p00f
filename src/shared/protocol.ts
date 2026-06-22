@@ -26,11 +26,15 @@ export interface CreateCiphertext {
   pin?: string;
   requireTurnstile?: boolean;
   allowViewerDelete?: boolean;
+  revealAnchored?: boolean;
   turnstile?: string;
 }
 
 export type RevealOutcome =
-  | { ok: true; content: Uint8Array }
+  // expiresAt (epoch ms) is the authoritative deadline disclosed by the server on
+  // a successful reveal (ADR-0017), read from the x-poof-expires-at header. For a
+  // reveal-anchored poof it is the only source of the deadline.
+  | { ok: true; content: Uint8Array; expiresAt?: number }
   | { ok: false; reason: "gone" | "locked" | "pin" | "turnstile"; status: number; attemptsLeft?: number };
 
 function trimBase(baseUrl: string): string {
@@ -52,6 +56,7 @@ export async function createClip(
   if (c.pin) fd.set("pin", c.pin);
   if (c.requireTurnstile) fd.set("requireTurnstile", "1");
   if (c.allowViewerDelete) fd.set("allowViewerDelete", "1");
+  if (c.revealAnchored) fd.set("revealAnchored", "1");
   // metaCipher/contentCipher are Uint8Array<ArrayBufferLike>; cast to BlobPart
   // (the DOM lib wants an ArrayBuffer-backed view). Type-only; no runtime change.
   fd.set("meta", new Blob([c.metaCipher as BlobPart]));
@@ -110,7 +115,11 @@ export async function revealClip(
     init.body = JSON.stringify({ pin: opts?.pin, turnstile: opts?.turnstile });
   }
   const res = await http(`${trimBase(baseUrl)}/api/clip/${id}/reveal`, init);
-  if (res.ok) return { ok: true, content: new Uint8Array(await res.arrayBuffer()) };
+  if (res.ok) {
+    const exp = res.headers.get("x-poof-expires-at");
+    const expiresAt = exp && Number.isFinite(Number(exp)) ? Number(exp) : undefined;
+    return { ok: true, content: new Uint8Array(await res.arrayBuffer()), expiresAt };
+  }
   if (res.status === 410) return { ok: false, reason: "gone", status: 410 };
   if (res.status === 423) return { ok: false, reason: "locked", status: 423 };
   if (res.status === 403) return { ok: false, reason: "turnstile", status: 403 };

@@ -115,6 +115,9 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   // Opt-in viewer-delete (ADR-0016): default off, so a link-holder cannot burn
   // the poof unless the creator allowed it.
   const allowViewerDelete = form.get("allowViewerDelete") === "1";
+  // Opt-in reveal-anchored ttl (ADR-0017): default off. When set, the ttl clock
+  // starts at the first reveal instead of at create.
+  const revealAnchored = form.get("revealAnchored") === "1";
 
   // The client generates the id so it can salt the key derivation with it
   // before uploading (ADR-0009). Fall back to a server id if absent (tests).
@@ -139,6 +142,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     pin,
     requireTurnstile,
     allowViewerDelete,
+    revealAnchored,
     ownerHash,
     ownerSalt,
     inlineMax: Number(env.INLINE_MAX_BYTES) || INLINE_MAX_BYTES,
@@ -229,7 +233,17 @@ async function handleReveal(id: string, env: Env, request: Request): Promise<Res
 
   const r = await env.CLIP.getByName(id).reveal(pin, turnstileVerified);
   if (r.ok) {
-    return new Response(r.content, { headers: { "content-type": "application/octet-stream" } });
+    // ADR-0017: disclose the authoritative deadline only on a successful reveal
+    // (past the turnstile and PIN gates), to a caller who now holds the plaintext.
+    // It is never on the non-consuming meta/envelope, so ADR-0014 scraper-privacy
+    // holds. expose-headers lets a cross-origin browser caller read it.
+    return new Response(r.content, {
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-poof-expires-at": String(r.expiresAt),
+        "access-control-expose-headers": "x-poof-expires-at",
+      },
+    });
   }
   const status =
     r.reason === "gone" ? 410 : r.reason === "locked" ? 423 : r.reason === "turnstile_required" ? 403 : 401;

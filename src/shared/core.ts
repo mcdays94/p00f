@@ -21,8 +21,16 @@ export interface ClipMeta {
   size: number;
   // Expiry deadline (epoch ms) lives in the ENCRYPTED metadata so only a
   // Fragment-Key holder can read it (ADR-0014). The server keeps its own
-  // authoritative expiry to run the Burn but no longer publishes it.
+  // authoritative expiry to run the Burn but no longer publishes it. Present only
+  // for a creation-anchored poof; a reveal-anchored poof has no deadline yet.
   expiresAt?: number;
+  // Reveal-anchored poof (ADR-0017): the ttl clock starts at the first Reveal, so
+  // there is no expiresAt at create. The duration is stored here (for the
+  // recipient's "starts when you reveal it" hint and the fallback countdown); the
+  // authoritative deadline arrives in the reveal response. Mutually exclusive with
+  // expiresAt.
+  ttlMs?: number;
+  revealAnchored?: boolean;
   // Creator preference: show the recipient a countdown (default on). UI-level
   // only, since the revealer holds the key.
   showCountdown?: boolean;
@@ -41,6 +49,10 @@ export interface CreateInput {
   // Creator opt-in: let any link-holder (the revealer) burn the poof early
   // without the owner token (ADR-0016), default off.
   allowViewerDelete?: boolean;
+  // Creator opt-in: start the ttl clock at the first Reveal rather than at create
+  // (ADR-0017), default off. The poof waits under the unrevealed cap until first
+  // revealed, then burns ttlMs later.
+  revealAnchored?: boolean;
   // Creator preference for the recipient countdown (ADR-0014), default on.
   // Pass false to fold ClipMeta.showCountdown=false into the encrypted metadata
   // (e.g. the CLI --no-countdown flag). Omit to leave the default.
@@ -56,10 +68,15 @@ export interface CreatedClip {
 export async function create(http: HttpLike, baseUrl: string, input: CreateInput): Promise<CreatedClip> {
   const master = generateMasterKey();
   const id = generateClipId();
-  // Stamp the expiry deadline into the encrypted metadata (ADR-0014) so the
-  // recipient can render a private countdown. Default mirrors the server's TTL.
   const ttlMs = input.ttlMs ?? 5 * 60_000;
-  const meta: ClipMeta = { ...input.meta, expiresAt: input.meta.expiresAt ?? Date.now() + ttlMs };
+  const revealAnchored = input.revealAnchored ?? false;
+  // ADR-0017: a reveal-anchored poof has no deadline at create, so store the
+  // duration + flag for the recipient (the absolute deadline arrives only in the
+  // successful reveal response). A creation-anchored poof keeps stamping the
+  // absolute expiry into the encrypted metadata (ADR-0014) for a private countdown.
+  const meta: ClipMeta = revealAnchored
+    ? { ...input.meta, revealAnchored: true, ttlMs }
+    : { ...input.meta, expiresAt: input.meta.expiresAt ?? Date.now() + ttlMs };
   // Only stamp showCountdown when explicitly disabled; the default (on) needs no
   // field, keeping the encrypted metadata minimal (ADR-0014, reveal checks !== false).
   if (input.showCountdown === false) meta.showCountdown = false;
@@ -74,6 +91,7 @@ export async function create(http: HttpLike, baseUrl: string, input: CreateInput
     pin: input.pin,
     requireTurnstile: input.requireTurnstile,
     allowViewerDelete: input.allowViewerDelete,
+    revealAnchored,
     turnstile: input.turnstile,
   });
   return { link: buildLink({ origin: baseUrl, id: serverId, key: master }), id: serverId, ownerToken };
@@ -122,6 +140,10 @@ export interface ReadResult {
   meta?: ClipMeta;
   content?: Uint8Array;
   attemptsLeft?: number;
+  // The authoritative expiry deadline (epoch ms) the server disclosed on this
+  // reveal (ADR-0017). For a reveal-anchored poof this is the only source of the
+  // deadline; a caller can render the post-reveal countdown from it.
+  expiresAt?: number;
 }
 
 // Consuming: reveals and decrypts content (ADR-0002). Fetches metadata first
@@ -149,7 +171,7 @@ export async function read(
   } catch {
     return { ok: false, reason: "decrypt", meta };
   }
-  return { ok: true, content, meta };
+  return { ok: true, content, meta, expiresAt: r.expiresAt };
 }
 
 // Early burn. With an owner token it is the owner-gated delete (ADR-0008); with

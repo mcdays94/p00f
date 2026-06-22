@@ -133,6 +133,35 @@ describe("@p00f/core", () => {
     expect((await info(http, offClip.link)).meta?.showCountdown).toBe(false);
   });
 
+  it("reveal-anchored: stores ttlMs + revealAnchored in metadata, not an absolute expiresAt (ADR-0017)", async () => {
+    const { http } = capturing();
+    const anchored = await create(http, base, {
+      content: te.encode("self destruct"),
+      meta: { kind: "text", size: 13 },
+      revealBudget: 2,
+      ttlMs: 600_000,
+      revealAnchored: true,
+    });
+    const i = await info(http, anchored.link);
+    expect(i.meta?.revealAnchored).toBe(true);
+    expect(i.meta?.ttlMs).toBe(600_000);
+    // No deadline exists until the first reveal, so none is stamped.
+    expect(i.meta?.expiresAt).toBeUndefined();
+    expect(i.expiresAt).toBeUndefined();
+
+    // A creation-anchored poof keeps the absolute expiresAt and no flag (ADR-0014).
+    const normal = await create(http, base, {
+      content: te.encode("normal"),
+      meta: { kind: "text", size: 6 },
+      revealBudget: 1,
+      ttlMs: 600_000,
+    });
+    const n = await info(http, normal.link);
+    expect(n.meta?.expiresAt).toBeGreaterThan(Date.now());
+    expect(n.meta?.revealAnchored).toBeUndefined();
+    expect(n.meta?.ttlMs).toBeUndefined();
+  });
+
   it("default poof is agent-revealable; requireTurnstile gates it on a human token (ADR-0015)", async () => {
     const { http } = capturing();
     // Default: no captcha required, so a headless caller (no token) can reveal.
@@ -176,6 +205,23 @@ describe("@p00f/core", () => {
     const r = await read(http, created.link, { pin: "9119" });
     expect(r.ok).toBe(true);
     expect(td.decode(r.content as Uint8Array)).toBe("token-value");
+  });
+
+  it("reveal-anchored: read surfaces the armed deadline from the reveal response (ADR-0017)", async () => {
+    const { http } = capturing();
+    const created = await create(http, base, {
+      content: te.encode("tick"),
+      meta: { kind: "text", size: 4 },
+      revealBudget: 2,
+      ttlMs: 3_600_000,
+      revealAnchored: true,
+    });
+    const before = Date.now();
+    const r = await read(http, created.link);
+    expect(r.ok).toBe(true);
+    // The deadline is known only after the reveal arms it; read passes it through.
+    expect(r.expiresAt).toBeGreaterThanOrEqual(before + 3_600_000 - 5_000);
+    expect(r.expiresAt).toBeLessThanOrEqual(Date.now() + 3_600_000);
   });
 
   it("burns with the owner token so a later read is gone", async () => {

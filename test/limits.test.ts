@@ -2,10 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   clampTtlMs,
   clampRevealBudget,
+  createExpiryMs,
   MIN_TTL_MS,
   MAX_TTL_MS,
   DEFAULT_TTL_MS,
   MAX_REVEAL_BUDGET,
+  UNREVEALED_CAP_MS,
 } from "../src/shared/limits";
 
 // #22: custom TTL + reveal budget are clamped to shared bounds (one source of
@@ -22,6 +24,24 @@ describe("clampTtlMs", () => {
     expect(clampTtlMs(0)).toBe(DEFAULT_TTL_MS);
     expect(clampTtlMs(-5)).toBe(DEFAULT_TTL_MS);
     expect(clampTtlMs(NaN)).toBe(DEFAULT_TTL_MS);
+  });
+});
+
+// ADR-0017: create-time expiry policy. A creation-anchored Poof expires at
+// createdAt + ttl. A reveal-anchored Poof has no deadline until first reveal, so
+// at create it is bounded only by the unrevealed cap (the 30-day max TTL); its
+// ttl clock starts on the first Reveal, not here.
+describe("createExpiryMs", () => {
+  const createdAt = 1_000_000;
+  it("creation-anchored: createdAt + ttl", () => {
+    expect(createExpiryMs(createdAt, 300_000, false)).toBe(createdAt + 300_000);
+  });
+  it("reveal-anchored: createdAt + unrevealed cap, ignoring ttl", () => {
+    expect(createExpiryMs(createdAt, 300_000, true)).toBe(createdAt + UNREVEALED_CAP_MS);
+  });
+  it("unrevealed cap equals the max TTL (30 days)", () => {
+    expect(UNREVEALED_CAP_MS).toBe(MAX_TTL_MS);
+    expect(UNREVEALED_CAP_MS).toBe(30 * 24 * 60 * 60_000);
   });
 });
 
