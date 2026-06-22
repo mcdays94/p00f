@@ -4,11 +4,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "The p00f command-line interface and local MCP server. `poof` shares a file, text, or piped stdin as a zero-knowledge, expiring link; `poof-mcp` exposes the same over local stdio for agents. All encryption is caller-side, so the hosted service only ever sees ciphertext. Defaults to the hosted app at https://p00f.me.",
+  "description": "The p00f command-line interface. `poof` shares a file, text, or piped stdin as a zero-knowledge, expiring link, and reveals or burns one. All encryption is caller-side, so the hosted service only ever sees ciphertext. Defaults to the hosted app at https://p00f.me.",
   "type": "module",
   "bin": {
-    "poof": "dist/poof.mjs",
-    "poof-mcp": "dist/poof-mcp.mjs"
+    "poof": "dist/poof.mjs"
   },
   "files": ["dist", "README.md"],
   "engines": {
@@ -31,13 +30,12 @@
     "ephemeral",
     "clipboard",
     "cli",
-    "mcp",
     "command-line",
     "aes-gcm",
     "agents"
   ],
   "scripts": {
-    "build": "esbuild ../../src/cli/poof.ts --bundle --platform=node --format=esm --outfile=dist/poof.mjs --banner:js='#!/usr/bin/env node' && esbuild ../../src/mcp/server.ts --bundle --platform=node --format=esm --outfile=dist/poof-mcp.mjs --banner:js='#!/usr/bin/env node'",
+    "build": "esbuild ../../src/cli/poof.ts --bundle --platform=node --format=esm --outfile=dist/poof.mjs --banner:js='#!/usr/bin/env node'",
     "prepublishOnly": "npm run build"
   }
 }
