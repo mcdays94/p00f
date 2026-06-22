@@ -130,6 +130,28 @@ describe("ClipDO lifecycle", () => {
     }
   });
 
+  // ADR-0017 (option C): a later reveal of a budget>=2 anchored clip keeps the
+  // deadline the FIRST reveal armed; it must NOT re-arm to now+ttl (the rejected
+  // option B, which would overstate the time left for a later viewer).
+  it("reveal-anchored: a later reveal keeps the first-armed deadline, not re-armed", async () => {
+    const s = stub("anchor-2nd");
+    await s.create({
+      metadata: b(1),
+      content: b(2),
+      ttlMs: 3_600_000,
+      revealBudget: 3,
+      size: 1,
+      revealAnchored: true,
+    });
+    const r1 = await s.reveal();
+    const armed = r1.ok ? r1.expiresAt : 0;
+    // a small real delay so a (wrong) re-arm would compute a strictly later deadline
+    await new Promise((res) => setTimeout(res, 25));
+    const r2 = await s.reveal();
+    expect(r2.ok).toBe(true);
+    if (r2.ok) expect(r2.expiresAt).toBe(armed);
+  });
+
   // ADR-0017 invariant: a wrong PIN must not arm the clock, or a guesser could
   // start a self-destruct they cannot read. Only a successful reveal arms.
   it("reveal-anchored: a wrong PIN does not arm the clock", async () => {
