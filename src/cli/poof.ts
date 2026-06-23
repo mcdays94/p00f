@@ -5,8 +5,19 @@
 // (Add @types/node for full typing; this entrypoint runs only under Node.)
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
+import { spawn } from "node:child_process";
 import { create, read, info, burn } from "../shared/core";
-import { parseArgs, ttlToMs, readsToBudget, inferKind, wantsAnimation, poofFrame, coral } from "./args";
+import {
+  parseArgs,
+  ttlToMs,
+  readsToBudget,
+  inferKind,
+  wantsAnimation,
+  poofFrame,
+  coral,
+  wantsCopy,
+  clipboardCandidates,
+} from "./args";
 import { MAX_CLIP_BYTES, formatBytes } from "../shared/limits";
 import { resolveBase } from "../shared/base";
 import { webcrypto } from "node:crypto";
@@ -46,6 +57,43 @@ function startPoofAnimation(label) {
 
 function maybeAnimate(flags, label) {
   return wantsAnimation(flags, process.stderr.isTTY === true) ? startPoofAnimation(label) : null;
+}
+
+// Copy text to the OS clipboard by spawning the platform clipboard tool and
+// piping the text to its stdin (no runtime deps). Tries each candidate in order;
+// resolves true on the first that exits 0, false if none is available or all
+// fail. Never throws, so a missing tool cannot break a create.
+function copyToClipboard(text) {
+  const cands = clipboardCandidates(process.platform);
+  return new Promise((resolve) => {
+    let i = 0;
+    const attempt = () => {
+      if (i >= cands.length) return resolve(false);
+      const { cmd, args } = cands[i++];
+      let settled = false;
+      const next = (ok) => {
+        if (settled) return;
+        settled = true;
+        if (ok) resolve(true);
+        else attempt();
+      };
+      let child;
+      try {
+        child = spawn(cmd, args, { stdio: ["pipe", "ignore", "ignore"] });
+      } catch {
+        return next(false);
+      }
+      child.on("error", () => next(false)); // ENOENT: tool not installed
+      child.on("close", (code) => next(code === 0));
+      child.stdin.on("error", () => {}); // ignore EPIPE if the child exits early
+      try {
+        child.stdin.end(text);
+      } catch {
+        // the error event settles this attempt
+      }
+    };
+    attempt();
+  });
 }
 
 async function readStdin() {
@@ -149,6 +197,13 @@ async function cmdCreate(a) {
   } else {
     process.stdout.write(created.link + "\n");
     process.stderr.write(`owner token (keep it to burn early; not stored anywhere): ${created.ownerToken}\n`);
+  }
+
+  // Auto-copy the link to the clipboard when interactive (default), forced by
+  // --copy, suppressed by --no-copy / --json / a piped stdout. stdout stays the
+  // link only, so LINK=$(poof file) is unaffected.
+  if (wantsCopy(a.flags, process.stdout.isTTY === true)) {
+    if (await copyToClipboard(created.link)) process.stderr.write("(link copied to clipboard)\n");
   }
 }
 
