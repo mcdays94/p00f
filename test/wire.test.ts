@@ -70,6 +70,26 @@ describe("wire format contract", () => {
     expect(d.cli).toContain("@p00f/cli");
   });
 
+  it("documents reveal-anchored TTL (#27, ADR-0017): metadata fields and the reveal deadline header", () => {
+    // A reveal-anchored poof stores ttlMs + revealAnchored in the encrypted
+    // metadata instead of a precomputed expiresAt, so the published schema must
+    // list them (not only expiresAt).
+    expect(WIRE_FORMAT.envelope.encrypted).toContain("ttlMs");
+    expect(WIRE_FORMAT.envelope.encrypted).toContain("revealAnchored");
+
+    // The authoritative deadline is disclosed only on a successful reveal, via
+    // the x-poof-expires-at response header (uniform for both TTL modes). Both
+    // the discovery doc's reveal endpoint and llms.txt must mention it.
+    const d = discoveryDoc("https://p00f.test/");
+    expect(d.endpoints.reveal).toContain("x-poof-expires-at");
+
+    const txt = llmsTxt("https://p00f.test");
+    expect(txt).toContain("x-poof-expires-at");
+    expect(txt).toContain("revealAnchored");
+    // still no em-dashes in the augmented copy (house rule)
+    expect(txt).not.toContain("\u2014");
+  });
+
   it("renders llms.txt with the decryptable wire format and the fragment rule", () => {
     const txt = llmsTxt("https://p00f.test");
     expect(txt).toContain("HKDF-SHA-256");

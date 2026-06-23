@@ -77,8 +77,8 @@ export const WIRE_FORMAT = {
   },
   envelope: {
     cleartext: ["id", "revealsRemaining", "pinRequired", "turnstileRequired", "allowViewerDelete", "hasContent", "sizeBucket"],
-    encrypted: "metadata: base64url AES-GCM ciphertext of the JSON { kind, filename, mime, size, expiresAt, showCountdown }",
-    note: "The exact kind, filename, mime, size, and the expiry deadline (expiresAt) are inside the encrypted metadata blob, never in cleartext (ADR-0014). pinRequired and turnstileRequired tell a caller whether it needs the out-of-band PIN/password and/or a human (a turnstileRequired poof cannot be revealed by the machine path). allowViewerDelete is true when the creator let any link-holder burn the poof early via POST /api/clip/:id/burn (ADR-0016).",
+    encrypted: "metadata: base64url AES-GCM ciphertext of the JSON { kind, filename, mime, size, showCountdown, and a TTL field that is either expiresAt (creation-anchored) or ttlMs + revealAnchored:true (reveal-anchored, ADR-0017) }",
+    note: "The exact kind, filename, mime, size, and the expiry are inside the encrypted metadata blob, never in cleartext (ADR-0014). pinRequired and turnstileRequired tell a caller whether it needs the out-of-band PIN/password and/or a human (a turnstileRequired poof cannot be revealed by the machine path). allowViewerDelete is true when the creator let any link-holder burn the poof early via POST /api/clip/:id/burn (ADR-0016). The TTL field has two shapes (ADR-0017): a creation-anchored poof carries an absolute expiresAt; a reveal-anchored poof carries only ttlMs + revealAnchored and has no deadline until its first reveal, at which point the server discloses the authoritative deadline via the x-poof-expires-at response header (epoch ms, CORS-exposed) returned on every successful reveal.",
   },
 } as const;
 
@@ -105,9 +105,9 @@ export function discoveryDoc(origin: string): DiscoveryDoc {
       "All encryption and decryption happen caller-side. The Fragment Key lives in the URL fragment and never reaches the server. The server cannot read content and cannot recover a lost link.",
     cli: `Official CLI, no install needed: 'npx @p00f/cli <file>' creates and prints the link, 'npx @p00f/cli get <link>' reveals and decrypts, 'npx @p00f/cli info <link>' inspects without consuming a reveal. Install it with 'npm i -g @p00f/cli'. It wraps @p00f/core so all crypto stays caller-side; it talks to ${DEFAULT_POOF_BASE} by default, override with the POOF_BASE environment variable. Prefer the CLI if you can run a shell; the raw HTTP endpoints below are for callers that cannot.`,
     endpoints: {
-      create: `POST ${o}/api/clip (multipart: meta, content ciphertext blobs, ttlMs, revealBudget, optional pin, optional id). No Turnstile token is required on the machine path; it is allowed under a rate-limit floor.`,
+      create: `POST ${o}/api/clip (multipart: meta, content ciphertext blobs, ttlMs, revealBudget, optional pin, optional id, and optional requireTurnstile/allowViewerDelete/revealAnchored set to "1"). revealAnchored starts the TTL clock at the first reveal instead of at create (ADR-0017). No Turnstile token is required on the machine path; it is allowed under a rate-limit floor.`,
       envelope: `GET ${o}/c/:id.json (or GET ${o}/c/:id with Accept: application/json). Non-consuming. Returns the encrypted metadata envelope, including pinRequired and turnstileRequired so a caller knows up front whether it can reveal.`,
-      reveal: `POST ${o}/api/clip/:id/reveal. Consuming. JSON body carries { pin } when pinRequired and { turnstile } when turnstileRequired (both optional otherwise). Returns the encrypted content as application/octet-stream; decrypt caller-side. A poof with turnstileRequired=false is revealable by a headless agent with no token (and with the PIN if pinRequired).`,
+      reveal: `POST ${o}/api/clip/:id/reveal. Consuming. JSON body carries { pin } when pinRequired and { turnstile } when turnstileRequired (both optional otherwise). Returns the encrypted content as application/octet-stream; decrypt caller-side. A successful reveal also returns the authoritative deadline in the x-poof-expires-at response header (epoch ms, CORS-exposed); for a reveal-anchored poof (ADR-0017) this reveal is what starts the clock. A poof with turnstileRequired=false is revealable by a headless agent with no token (and with the PIN if pinRequired).`,
       meta: `GET ${o}/api/clip/:id/meta. Non-consuming legacy metadata endpoint.`,
       delete: `POST ${o}/api/clip/:id/delete (body: { ownerToken }). Owner-gated early burn.`,
       burn: `POST ${o}/api/clip/:id/burn. Viewer-initiated early burn, no owner token. Only honored when the envelope's allowViewerDelete is true (the creator opted in); otherwise HTTP 403. Destroys the poof for everyone.`,
@@ -156,8 +156,10 @@ HTTP wire format below is only for callers that cannot run the CLI.
 
 - POST ${o}/api/clip
   Create. Multipart form: meta and content ciphertext blobs, ttlMs, revealBudget,
-  optional pin, optional id. No Turnstile token is required on the machine path;
-  anonymous create is allowed under an identity-free rate-limit floor.
+  optional pin, optional id, and optional requireTurnstile/allowViewerDelete/revealAnchored
+  set to "1". revealAnchored starts the TTL clock at the first reveal instead of at
+  create (ADR-0017). No Turnstile token is required on the machine path; anonymous
+  create is allowed under an identity-free rate-limit floor.
 - GET ${o}/c/:id.json  (or GET ${o}/c/:id with Accept: application/json)
   Non-consuming. Returns the encrypted metadata envelope (see below).
 - POST ${o}/api/clip/:id/reveal
@@ -165,7 +167,10 @@ HTTP wire format below is only for callers that cannot run the CLI.
   caller-side. Reveal is a POST so prefetchers and unfurlers never spend budget.
   JSON body carries { pin } when the envelope says pinRequired, and { turnstile }
   when it says turnstileRequired. A poof with turnstileRequired=false needs no
-  human and is revealable headlessly.
+  human and is revealable headlessly. A successful reveal returns the authoritative
+  burn deadline in the x-poof-expires-at response header (epoch ms); for a
+  reveal-anchored poof (ADR-0017) the deadline only exists once this first reveal
+  starts the clock.
 - POST ${o}/api/clip/:id/delete  body { ownerToken }
   Owner-gated early burn. The owner token is returned once at create and is
   never carried in the link.
@@ -208,7 +213,9 @@ Key and is NEVER sent to the server. To reveal without a browser:
    pinRequired is true, you need the PIN/password the sharer gave you.
 3. POST ${o}/api/clip/<id>/reveal with a JSON body of { pin } if pinRequired
    (otherwise an empty POST). The response body is AES-GCM ciphertext laid out as
-   iv(12) || ciphertext+tag.
+   iv(12) || ciphertext+tag. Read the x-poof-expires-at response header for the
+   authoritative burn deadline (epoch ms); for a reveal-anchored poof this is the
+   only place the deadline appears, since this reveal started the clock.
 4. Derive the content key with ${w.kdf.algorithm}: salt = ${w.kdf.salt}, info =
    "${w.kdf.info.content}", IKM = the 32-byte key (with the PIN bytes appended
    when a PIN is set). Decrypt the reveal bytes. The metadata blob from step 2
