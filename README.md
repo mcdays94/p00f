@@ -63,20 +63,28 @@ sequenceDiagram
     autonumber
     participant C as Creator
     participant S as p00f server
+    participant O as R2 bucket
     participant R as Recipient
     Note over C: browser, CLI, or agent
     C->>C: generate a random key and encrypt locally
     C->>S: upload ciphertext only
-    S->>S: store in a per-clip Durable Object
+    S->>S: store in a per-poof Durable Object
+    opt content over 1 MiB
+        S->>O: spill ciphertext to R2, keep only a random key
+    end
     Note over S: TTL alarm plus atomic reveal budget
     S-->>C: clip id
     C->>C: build the link with the key in the fragment
     Note over C,R: the key fragment never touches the server
     C->>R: hand over the link
     R->>S: fetch ciphertext
+    opt stored in R2
+        S->>O: read the ciphertext blob
+    end
     S->>S: spend one reveal and burn when the budget is empty
     S-->>R: ciphertext
     R->>R: decrypt locally with the key from the fragment
+    Note over S,O: on burn, the DO row and any R2 blob are deleted
 ```
 
 The recipient sees the plaintext. The infrastructure never does. Here is the same split, by what each side ever holds:
@@ -95,6 +103,8 @@ The recipient sees the plaintext. The infrastructure never does. Here is the sam
       the key lives in the link's #fragment and is never sent to the
       server, so p00f physically cannot decrypt what it stores.
 ```
+
+On the server side, each poof is a per-poof Durable Object that holds the encrypted metadata and the burn bookkeeping. Content up to 1 MiB stays inline in that Durable Object; anything larger has its ciphertext spilled to R2, with the Durable Object keeping only a random key to it. Either way the stored bytes are the same client-side ciphertext, so R2 sees only an opaque blob, and any R2 object follows the poof's lifecycle: written on upload, fetched and relayed on reveal, and deleted when the poof burns (its TTL, its reveal budget, or a manual delete).
 
 Revealed content renders inside a sandboxed, opaque-origin iframe, so a hostile payload in a poof cannot reach back out and steal the key from the page ([ADR-0012](docs/adr/0012-hostile-rendering-key-isolation.md)).
 
@@ -135,21 +145,7 @@ Agents that want the library directly can `npm install @p00f/core` and call it; 
 
 ## Built on Cloudflare
 
-p00f runs entirely on Cloudflare: Workers serve the app and the API, and a per-poof Durable Object holds each clip and runs its burn timer. Encryption is all client-side, so none of this infrastructure can read your content; it only ever holds ciphertext.
-
-### Where the bytes live, and when R2 is used
-
-Each poof lives in its own Durable Object (SQLite-backed) that holds the encrypted metadata, the burn bookkeeping (reveals remaining, the TTL deadline for the alarm, the PIN hash), and, for small payloads, the content itself. Content up to **1 MiB stays inline in the Durable Object**; anything larger has its content ciphertext written to **R2** (the `poof-content` bucket), and the Durable Object keeps only a random key that points at it. The 1 MiB threshold and the 25 MiB ceiling are configurable.
-
-Inline or in R2, the stored bytes are the **same client-side ciphertext** (AES-GCM-256, with the 12-byte IV prepended). R2 sees exactly what the Durable Object sees: an opaque encrypted blob. The decryption key was generated on your device and lives only in the link's `#fragment`, so R2, like the rest of the stack, physically cannot read what it stores. The R2 object key is random and opaque (not derived from the clip id or the content), and the bucket is private, reachable only through the Worker.
-
-An R2 object shares the poof's lifecycle exactly:
-
-- **Created** on upload, only when the content ciphertext exceeds 1 MiB.
-- **Read** on reveal: the Durable Object fetches the object and relays the ciphertext to your client, which decrypts it locally. Your client never talks to R2 directly.
-- **Deleted** when the poof burns. The TTL alarm firing, the reveal budget reaching zero, an owner delete, and a viewer delete all run the same burn, which deletes the R2 object, cancels the alarm, and wipes the Durable Object's row and storage.
-
-The R2 delete is best-effort: in the rare event it fails, the Durable Object row (the only thing that holds the R2 key) is still removed, so the poof is already unreachable, and what remains is orphaned ciphertext that no one holds a key for. Nothing readable ever lingers.
+p00f runs entirely on Cloudflare: Workers serve the app and the API, a per-poof Durable Object holds each clip and runs its burn timer, and larger payloads spill to R2. Encryption is all client-side, so none of that infrastructure can read your content.
 
 ## Develop
 
@@ -159,7 +155,7 @@ npm run dev          # builds the client and starts wrangler dev
 npm test             # vitest under @cloudflare/vitest-pool-workers
 ```
 
-The web app (`src/client/`) and CLI (`src/cli/`) are thin shells over the shared engine in `src/shared/`; the Worker and Durable Object live in `src/worker/`. See [`CONTEXT.md`](CONTEXT.md) for the vocabulary and [`docs/adr/`](docs/adr/) for the decisions behind the design. The hero banner above is generated from [`docs/hero/banner.html`](docs/hero/banner.html).
+The web app (`src/client/`) and CLI (`src/cli/`) are thin shells over the shared engine in `src/shared/`; the Worker and Durable Object live in `src/worker/`. See [`docs/adr/`](docs/adr/) for the decisions behind the design. The hero banner above is generated from [`docs/hero/banner.html`](docs/hero/banner.html).
 
 ## Status
 
