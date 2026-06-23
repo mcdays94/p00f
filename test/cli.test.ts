@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseArgs, ttlToMs, readsToBudget, inferKind } from "../src/cli/args";
+import { parseArgs, ttlToMs, readsToBudget, inferKind, wantsAnimation, poofFrame, coral } from "../src/cli/args";
 
 describe("cli args", () => {
   it("defaults to create with a file positional", () => {
@@ -67,5 +67,56 @@ describe("cli args", () => {
     expect(inferKind({ isBinary: true })).toBe("file");
     expect(inferKind({ filename: "a.txt" })).toBe("file");
     expect(inferKind({})).toBe("text");
+  });
+});
+
+describe("cli animation (#26)", () => {
+  it("plays in a TTY by default", () => {
+    expect(wantsAnimation({}, true)).toBe(true);
+  });
+
+  it("is suppressed when stderr is not a TTY (piped or redirected)", () => {
+    expect(wantsAnimation({}, false)).toBe(false);
+  });
+
+  it("is suppressed by --json so machine output stays clean", () => {
+    expect(wantsAnimation({ json: true }, true)).toBe(false);
+  });
+
+  it("is suppressed by --no-animation", () => {
+    expect(wantsAnimation({ "no-animation": true }, true)).toBe(false);
+  });
+
+  it("renders a single line: just a smoke glyph and the label, no pulsing dots", () => {
+    const frame = poofFrame("poofing", 3);
+    expect(frame).toContain("poofing");
+    expect(frame).not.toContain("\n");
+    expect(frame).not.toContain("."); // dots were dropped; do not let them creep back
+  });
+
+  it("is deterministic for a given tick", () => {
+    expect(poofFrame("revealing", 3)).toBe(poofFrame("revealing", 3));
+    expect(poofFrame("revealing", 3)).toContain("revealing");
+  });
+
+  it("actually animates: consecutive frames differ", () => {
+    expect(poofFrame("poofing", 0)).not.toBe(poofFrame("poofing", 1));
+  });
+
+  it("loops with a fixed period rather than growing unbounded", () => {
+    // one full cycle is 8 frames, so the loop never accumulates width
+    expect(poofFrame("poofing", 0)).toBe(poofFrame("poofing", 8));
+  });
+
+  it("tints only the smoke glyph via the glyph wrapper, never the label", () => {
+    expect(poofFrame("poofing", 0, (g) => `[${g}]`)).toBe("[·] poofing");
+  });
+
+  it("coral() wraps text in the brand #FF5959 truecolor escape when enabled", () => {
+    expect(coral("x", true)).toBe("\x1b[38;2;255;89;89mx\x1b[39m");
+  });
+
+  it("coral() returns text unchanged when disabled (NO_COLOR / non-TTY)", () => {
+    expect(coral("x", false)).toBe("x");
   });
 });

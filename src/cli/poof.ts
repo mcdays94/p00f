@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { create, read, info, burn } from "../shared/core";
-import { parseArgs, ttlToMs, readsToBudget, inferKind } from "./args";
+import { parseArgs, ttlToMs, readsToBudget, inferKind, wantsAnimation, poofFrame, coral } from "./args";
 import { MAX_CLIP_BYTES, formatBytes } from "../shared/limits";
 import { resolveBase } from "../shared/base";
 import { webcrypto } from "node:crypto";
@@ -20,6 +20,32 @@ const http = (u, init) => fetch(u, init);
 function die(msg, code) {
   process.stderr.write(msg + "\n");
   process.exit(code);
+}
+
+// The stderr "poof" animation (#26): a smoke-puff spinner drawn while a poof is
+// being created or revealed. stdout stays the link/content only, so it composes
+// in pipelines; the gate (TTY, not --json, not --no-animation) is wantsAnimation.
+// Returns a stop() that erases the spinner line and restores the cursor; call it
+// in a finally so an error still leaves the terminal clean.
+function startPoofAnimation(label) {
+  let tick = 0;
+  // The spinner only runs on a TTY (wantsAnimation gated it), so color is safe;
+  // still honour NO_COLOR (present at any value, including empty, disables it).
+  const colorOn = !("NO_COLOR" in process.env);
+  const draw = () =>
+    process.stderr.write("\r\x1b[2K" + poofFrame(label, tick++, (g) => coral(g, colorOn)));
+  process.stderr.write("\x1b[?25l"); // hide cursor
+  draw();
+  const id = setInterval(draw, 110);
+  if (typeof id.unref === "function") id.unref(); // never keep the process alive
+  return () => {
+    clearInterval(id);
+    process.stderr.write("\r\x1b[2K\x1b[?25h"); // clear line + restore cursor
+  };
+}
+
+function maybeAnimate(flags, label) {
+  return wantsAnimation(flags, process.stderr.isTTY === true) ? startPoofAnimation(label) : null;
 }
 
 async function readStdin() {
@@ -100,17 +126,23 @@ async function cmdCreate(a) {
   // first revealed, then burns ttl later. Default off.
   const revealAnchored = a.flags["reveal-anchored"] ? true : undefined;
 
-  const created = await create(http, BASE, {
-    content,
-    meta: { kind, filename, mime, size: content.length },
-    ttlMs,
-    revealBudget,
-    pin,
-    showCountdown,
-    requireTurnstile,
-    allowViewerDelete,
-    revealAnchored,
-  });
+  const stopAnim = maybeAnimate(a.flags, "poofing");
+  let created;
+  try {
+    created = await create(http, BASE, {
+      content,
+      meta: { kind, filename, mime, size: content.length },
+      ttlMs,
+      revealBudget,
+      pin,
+      showCountdown,
+      requireTurnstile,
+      allowViewerDelete,
+      revealAnchored,
+    });
+  } finally {
+    stopAnim?.();
+  }
 
   if (a.flags.json) {
     process.stdout.write(JSON.stringify({ link: created.link, id: created.id, ownerToken: created.ownerToken }) + "\n");
@@ -123,7 +155,13 @@ async function cmdCreate(a) {
 async function cmdGet(a) {
   const link = a.positional[0];
   if (!link) die("usage: poof get <link> [--out FILE] [--pin 1234]", 2);
-  const r = await read(http, link, { pin: typeof a.flags.pin === "string" ? a.flags.pin : undefined });
+  const stopAnim = maybeAnimate(a.flags, "revealing");
+  let r;
+  try {
+    r = await read(http, link, { pin: typeof a.flags.pin === "string" ? a.flags.pin : undefined });
+  } finally {
+    stopAnim?.();
+  }
   if (!r.ok) {
     if (r.reason === "turnstile")
       die("this poof requires a human captcha to reveal; open the link in a browser", 7);
