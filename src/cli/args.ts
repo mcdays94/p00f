@@ -27,6 +27,7 @@ const BOOLEAN_FLAGS = new Set([
   "viewer-delete",
   "reveal-anchored",
   "no-animation",
+  "no-copy",
 ]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -126,6 +127,40 @@ const CORAL_FG = "\x1b[38;2;255;89;89m";
 const FG_RESET = "\x1b[39m";
 export function coral(s: string, enabled: boolean): string {
   return enabled ? `${CORAL_FG}${s}${FG_RESET}` : s;
+}
+
+// Whether `poof` should copy the created link to the clipboard (#auto-copy). The
+// default is "auto when interactive": copy when stdout is a TTY (a human is
+// reading the link) but not when it is piped or captured, so `LINK=$(poof file)`
+// and scripts are untouched. --no-copy always wins; --copy forces a copy even
+// when piped; --json suppresses the auto-default (machine output) unless --copy
+// is explicit. Pure so it is unit-testable; poof.ts passes process.stdout.isTTY.
+export function wantsCopy(flags: Record<string, string | boolean>, isTty: boolean): boolean {
+  if (flags["no-copy"]) return false;
+  if (flags.copy) return true;
+  if (flags.json) return false;
+  return isTty;
+}
+
+// The OS clipboard command(s) to try for a platform (process.platform), in
+// preference order. poof.ts spawns each in turn and pipes the link to its stdin,
+// stopping at the first that succeeds; an unknown platform or a missing tool just
+// skips the copy (never fails the create). Pure: no spawning here.
+export interface ClipboardCmd {
+  cmd: string;
+  args: string[];
+}
+
+export function clipboardCandidates(platform: string): ClipboardCmd[] {
+  if (platform === "darwin") return [{ cmd: "pbcopy", args: [] }];
+  if (platform === "win32") return [{ cmd: "clip", args: [] }];
+  if (platform === "linux")
+    return [
+      { cmd: "wl-copy", args: [] }, // Wayland
+      { cmd: "xclip", args: ["-selection", "clipboard"] }, // X11
+      { cmd: "xsel", args: ["--clipboard", "--input"] }, // X11 alt
+    ];
+  return [];
 }
 
 export function inferKind(opts: {

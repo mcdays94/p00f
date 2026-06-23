@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { parseArgs, ttlToMs, readsToBudget, inferKind, wantsAnimation, poofFrame, coral } from "../src/cli/args";
+import {
+  parseArgs,
+  ttlToMs,
+  readsToBudget,
+  inferKind,
+  wantsAnimation,
+  poofFrame,
+  coral,
+  wantsCopy,
+  clipboardCandidates,
+} from "../src/cli/args";
 
 describe("cli args", () => {
   it("defaults to create with a file positional", () => {
@@ -118,5 +128,45 @@ describe("cli animation (#26)", () => {
 
   it("coral() returns text unchanged when disabled (NO_COLOR / non-TTY)", () => {
     expect(coral("x", false)).toBe("x");
+  });
+});
+
+describe("cli clipboard auto-copy", () => {
+  it("auto-copies the link when interactive (stdout is a TTY)", () => {
+    expect(wantsCopy({}, true)).toBe(true);
+  });
+
+  it("does not copy when piped/captured, so LINK=$(poof file) stays clean", () => {
+    expect(wantsCopy({}, false)).toBe(false);
+  });
+
+  it("--no-copy disables it even when interactive", () => {
+    expect(wantsCopy({ "no-copy": true }, true)).toBe(false);
+  });
+
+  it("--copy forces it even when piped", () => {
+    expect(wantsCopy({ copy: true }, false)).toBe(true);
+  });
+
+  it("--json suppresses auto-copy (machine output) unless --copy is given", () => {
+    expect(wantsCopy({ json: true }, true)).toBe(false);
+    expect(wantsCopy({ json: true, copy: true }, true)).toBe(true);
+  });
+
+  it("--no-copy wins over --copy when both are passed", () => {
+    expect(wantsCopy({ copy: true, "no-copy": true }, true)).toBe(false);
+  });
+
+  it("picks the platform clipboard command, in preference order", () => {
+    expect(clipboardCandidates("darwin").map((c) => c.cmd)).toEqual(["pbcopy"]);
+    expect(clipboardCandidates("win32").map((c) => c.cmd)).toEqual(["clip"]);
+    expect(clipboardCandidates("linux").map((c) => c.cmd)).toEqual(["wl-copy", "xclip", "xsel"]);
+    expect(clipboardCandidates("sunos")).toEqual([]); // unknown platform: no copy
+  });
+
+  it("treats --no-copy as a boolean flag, not consuming the next positional", () => {
+    const a = parseArgs(["file.txt", "--no-copy"]);
+    expect(a.flags["no-copy"]).toBe(true);
+    expect(a.positional).toEqual(["file.txt"]);
   });
 });

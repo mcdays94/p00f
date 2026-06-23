@@ -123,7 +123,7 @@ npx @p00f/cli info https://p00f.me/c/ID#KEY      # non-consuming
 npx @p00f/cli burn https://p00f.me/c/ID#KEY --token OWNER_TOKEN
 ```
 
-stdout is the link only, so `LINK=$(npx @p00f/cli report.md)` composes cleanly. The owner token needed to burn early goes to stderr, or use `--json`. Flags include `--ttl`, `--reads`, `--pin`, `--require-turnstile`, `--reveal-anchored`, `--no-countdown`, and `--out FILE`. Set `POOF_BASE` to point it at another deployment.
+stdout is the link only, so `LINK=$(npx @p00f/cli report.md)` composes cleanly. Run it in a terminal and it also copies the link to your clipboard; that is skipped automatically when stdout is piped or captured (so the `LINK=$(...)` form is untouched), forced with `--copy`, and turned off with `--no-copy`. The owner token needed to burn early goes to stderr, or use `--json`. Flags include `--ttl`, `--reads`, `--pin`, `--require-turnstile`, `--reveal-anchored`, `--no-countdown`, `--copy` / `--no-copy`, and `--out FILE`. Set `POOF_BASE` to point it at another deployment.
 
 Agents that want the library directly can `npm install @p00f/core` and call it; the hosted API only ever relays ciphertext, so a functional read needs the caller-side engine (see [ADR-0010](docs/adr/0010-agent-machine-integration.md)).
 
