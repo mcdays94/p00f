@@ -29,6 +29,9 @@ body {
 }
 .shell { max-width: 680px; margin: 0 auto; padding: 56px 20px 96px; }
 .masthead { margin-bottom: 28px; }
+/* Brand on the left, GitHub source mark on the right, aligned to the wordmark
+   row; the kicker sits on its own line below. */
+.masthead-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand-row { display: flex; align-items: center; gap: 10px; }
 .wordmark { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; color: var(--text); text-decoration: none; }
 .wordmark .dot { color: var(--coral); }
@@ -250,12 +253,12 @@ select:focus { outline: none; border-color: var(--coral); }
 .cd-fill { display: block; height: 100%; width: 100%; background: var(--coral); transition: width 0.5s linear; }
 .cd-text { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
 
-.site-footer { margin-top: 40px; text-align: center; font-size: 12px; }
-/* Footer GitHub mark links to the public source repo. */
-.site-footer .gh-link { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); padding: 6px; border-radius: 6px; }
-.site-footer .gh-link svg { display: block; opacity: 0.65; transition: opacity 0.15s; }
-.site-footer .gh-link:hover svg, .site-footer .gh-link:focus-visible svg { opacity: 1; }
-.site-footer .gh-link:focus-visible { outline: none; }
+/* GitHub mark in the masthead top-right links to the public source repo. */
+.gh-link { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); padding: 6px; border-radius: 6px; flex-shrink: 0; transition: color 0.15s; }
+.gh-link svg { display: block; opacity: 0.65; transition: opacity 0.15s; }
+.gh-link:hover, .gh-link:focus-visible { color: var(--coral); }
+.gh-link:hover svg, .gh-link:focus-visible svg { opacity: 1; }
+.gh-link:focus-visible { outline: none; }
 
 /* ---- Mobile (create + reveal). Tighten chrome, give controls full-width touch
    targets, stack the options so the Turnstile widget and selects never overflow
