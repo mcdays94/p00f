@@ -63,20 +63,28 @@ sequenceDiagram
     autonumber
     participant C as Creator
     participant S as p00f server
+    participant O as R2 bucket
     participant R as Recipient
     Note over C: browser, CLI, or agent
     C->>C: generate a random key and encrypt locally
     C->>S: upload ciphertext only
-    S->>S: store in a per-clip Durable Object
+    S->>S: store in a per-poof Durable Object
+    opt content over 1 MiB
+        S->>O: spill ciphertext to R2, keep only a random key
+    end
     Note over S: TTL alarm plus atomic reveal budget
     S-->>C: clip id
     C->>C: build the link with the key in the fragment
     Note over C,R: the key fragment never touches the server
     C->>R: hand over the link
     R->>S: fetch ciphertext
+    opt stored in R2
+        S->>O: read the ciphertext blob
+    end
     S->>S: spend one reveal and burn when the budget is empty
     S-->>R: ciphertext
     R->>R: decrypt locally with the key from the fragment
+    Note over S,O: on burn, the DO row and any R2 blob are deleted
 ```
 
 The recipient sees the plaintext. The infrastructure never does. Here is the same split, by what each side ever holds:
@@ -95,6 +103,8 @@ The recipient sees the plaintext. The infrastructure never does. Here is the sam
       the key lives in the link's #fragment and is never sent to the
       server, so p00f physically cannot decrypt what it stores.
 ```
+
+On the server side, each poof is a per-poof Durable Object that holds the encrypted metadata and the burn bookkeeping. Content up to 1 MiB stays inline in that Durable Object; anything larger has its ciphertext spilled to R2, with the Durable Object keeping only a random key to it. Either way the stored bytes are the same client-side ciphertext, so R2 sees only an opaque blob, and any R2 object follows the poof's lifecycle: written on upload, fetched and relayed on reveal, and deleted when the poof burns (its TTL, its reveal budget, or a manual delete). That burn-time delete is best-effort, so an R2 lifecycle rule backs it up by deleting any object after 65 days, longer than the maximum lifetime of any poof. Even a missed delete leaves only key-less ciphertext, which the rule then sweeps on its own.
 
 Revealed content renders inside a sandboxed, opaque-origin iframe, so a hostile payload in a poof cannot reach back out and steal the key from the page ([ADR-0012](docs/adr/0012-hostile-rendering-key-isolation.md)).
 
@@ -145,7 +155,7 @@ npm run dev          # builds the client and starts wrangler dev
 npm test             # vitest under @cloudflare/vitest-pool-workers
 ```
 
-The web app (`src/client/`) and CLI (`src/cli/`) are thin shells over the shared engine in `src/shared/`; the Worker and Durable Object live in `src/worker/`. See [`CONTEXT.md`](CONTEXT.md) for the vocabulary and [`docs/adr/`](docs/adr/) for the decisions behind the design. The hero banner above is generated from [`docs/hero/banner.html`](docs/hero/banner.html).
+The web app (`src/client/`) and CLI (`src/cli/`) are thin shells over the shared engine in `src/shared/`; the Worker and Durable Object live in `src/worker/`. See [`docs/adr/`](docs/adr/) for the decisions behind the design. The hero banner above is generated from [`docs/hero/banner.html`](docs/hero/banner.html).
 
 ## Status
 
