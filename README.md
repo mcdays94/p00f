@@ -135,7 +135,21 @@ Agents that want the library directly can `npm install @p00f/core` and call it; 
 
 ## Built on Cloudflare
 
-p00f runs entirely on Cloudflare: Workers serve the app and the API, a per-poof Durable Object holds each clip and runs its burn timer, and larger payloads spill to R2. Encryption is all client-side, so none of that infrastructure can read your content.
+p00f runs entirely on Cloudflare: Workers serve the app and the API, and a per-poof Durable Object holds each clip and runs its burn timer. Encryption is all client-side, so none of this infrastructure can read your content; it only ever holds ciphertext.
+
+### Where the bytes live, and when R2 is used
+
+Each poof lives in its own Durable Object (SQLite-backed) that holds the encrypted metadata, the burn bookkeeping (reveals remaining, the TTL deadline for the alarm, the PIN hash), and, for small payloads, the content itself. Content up to **1 MiB stays inline in the Durable Object**; anything larger has its content ciphertext written to **R2** (the `poof-content` bucket), and the Durable Object keeps only a random key that points at it. The 1 MiB threshold and the 25 MiB ceiling are configurable.
+
+Inline or in R2, the stored bytes are the **same client-side ciphertext** (AES-GCM-256, with the 12-byte IV prepended). R2 sees exactly what the Durable Object sees: an opaque encrypted blob. The decryption key was generated on your device and lives only in the link's `#fragment`, so R2, like the rest of the stack, physically cannot read what it stores. The R2 object key is random and opaque (not derived from the clip id or the content), and the bucket is private, reachable only through the Worker.
+
+An R2 object shares the poof's lifecycle exactly:
+
+- **Created** on upload, only when the content ciphertext exceeds 1 MiB.
+- **Read** on reveal: the Durable Object fetches the object and relays the ciphertext to your client, which decrypts it locally. Your client never talks to R2 directly.
+- **Deleted** when the poof burns. The TTL alarm firing, the reveal budget reaching zero, an owner delete, and a viewer delete all run the same burn, which deletes the R2 object, cancels the alarm, and wipes the Durable Object's row and storage.
+
+The R2 delete is best-effort: in the rare event it fails, the Durable Object row (the only thing that holds the R2 key) is still removed, so the poof is already unreachable, and what remains is orphaned ciphertext that no one holds a key for. Nothing readable ever lingers.
 
 ## Develop
 
