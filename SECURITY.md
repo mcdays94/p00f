@@ -18,20 +18,28 @@ sequenceDiagram
     autonumber
     participant C as Creator
     participant S as p00f server
+    participant O as R2 bucket
     participant R as Recipient
     Note over C: browser, CLI, or agent
     C->>C: generate a random key and encrypt locally
     C->>S: upload ciphertext only
-    S->>S: store in a per-clip Durable Object
+    S->>S: store in a per-poof Durable Object
+    opt content over 1 MiB
+        S->>O: spill ciphertext to R2, keep only a random key
+    end
     Note over S: TTL alarm plus atomic reveal budget
     S-->>C: clip id
     C->>C: build the link with the key in the fragment
     Note over C,R: the key fragment never touches the server
     C->>R: hand over the link
     R->>S: fetch ciphertext
+    opt stored in R2
+        S->>O: read the ciphertext blob
+    end
     S->>S: spend one reveal and burn when the budget is empty
     S-->>R: ciphertext
     R->>R: decrypt locally with the key from the fragment
+    Note over S,O: on burn, the DO row and any R2 blob are deleted
 ```
 
 ## What is NOT protected
@@ -45,4 +53,5 @@ sequenceDiagram
 
 - The only Turnstile secret committed to this repository is Cloudflare's public always-pass test key, which is safe. A real deployment sets its real secret with `wrangler secret put TURNSTILE_SECRET` and never commits it.
 - Abuse control on the machine path is an in-repo rate-limit floor (`docs/adr/0011-machine-path-abuse-control.md`), enforced per data center. It is a floor, not a hard global cap; Cloudflare network DDoS protection sits underneath.
+- Large content (over about 1 MiB) is stored in R2 as ciphertext only; the Fragment Key never reaches it, so R2 holds an opaque blob exactly like the Durable Object (`docs/adr/0006-storage-and-limits.md`). An R2 object is written at create, served on reveal, and deleted when the poof burns. That burn-time delete is best-effort, so a bucket lifecycle rule on `poof-content` deletes any object after 65 days as a backstop, longer than the maximum lifetime of any poof; even a missed delete leaves only key-less ciphertext.
 - Revealed content must be rendered as hostile to protect the key from an XSS-in-a-Clip (`docs/adr/0012-hostile-rendering-key-isolation.md`).

@@ -104,7 +104,7 @@ The recipient sees the plaintext. The infrastructure never does. Here is the sam
       server, so p00f physically cannot decrypt what it stores.
 ```
 
-On the server side, each poof is a per-poof Durable Object that holds the encrypted metadata and the burn bookkeeping. Content up to 1 MiB stays inline in that Durable Object; anything larger has its ciphertext spilled to R2, with the Durable Object keeping only a random key to it. Either way the stored bytes are the same client-side ciphertext, so R2 sees only an opaque blob, and any R2 object follows the poof's lifecycle: written on upload, fetched and relayed on reveal, and deleted when the poof burns (its TTL, its reveal budget, or a manual delete).
+On the server side, each poof is a per-poof Durable Object that holds the encrypted metadata and the burn bookkeeping. Content up to 1 MiB stays inline in that Durable Object; anything larger has its ciphertext spilled to R2, with the Durable Object keeping only a random key to it. Either way the stored bytes are the same client-side ciphertext, so R2 sees only an opaque blob, and any R2 object follows the poof's lifecycle: written on upload, fetched and relayed on reveal, and deleted when the poof burns (its TTL, its reveal budget, or a manual delete). That burn-time delete is best-effort, so an R2 lifecycle rule backs it up by deleting any object after 65 days, longer than the maximum lifetime of any poof. Even a missed delete leaves only key-less ciphertext, which the rule then sweeps on its own.
 
 Revealed content renders inside a sandboxed, opaque-origin iframe, so a hostile payload in a poof cannot reach back out and steal the key from the page ([ADR-0012](docs/adr/0012-hostile-rendering-key-isolation.md)).
 
