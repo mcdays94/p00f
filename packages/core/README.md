@@ -15,13 +15,13 @@ lost link. Whoever holds the link can decrypt it.
 ## Install
 
 ```sh
-npm install p00f-core
+npm install @p00f/core
 ```
 
 ## Use
 
 ```ts
-import { create, read, info, burn } from "p00f-core";
+import { create, read, info, burn } from "@p00f/core";
 
 const base = "https://p00f.example"; // a p00f deployment
 const te = new TextEncoder();
@@ -50,6 +50,14 @@ Lower-level building blocks are also exported: `generateMasterKey`,
 ciphertext-only protocol client (`createClip`, `getMeta`, `revealClip`,
 `deleteClip`). Every network function takes an injected `fetch`, so the key
 never reaches anything that talks to the server.
+
+Create-side policy helpers are also exported so thin shells (web, CLI, Raycast)
+agree on default kind inference and stay in sync: `inferCreateKind`,
+`inferTextKind`, `inferFileKind`, `looksLikeCode`, `loneHttpUrl`, `safeHttpUrl`,
+and `guessMimeFromFilename`. Shared limit constants and helpers are re-exported
+from `./limits` (`MAX_CLIP_BYTES`, `MIN_TTL_MS`, `MAX_TTL_MS`, `MAX_REVEAL_BUDGET`,
+`clampTtlMs`, `clampRevealBudget`, `formatBytes`). PIN validation is re-exported
+from `./pin` (`isValidPin`, `PIN_MIN_LEN`, `PIN_MAX_LEN`).
 
 ## License
 
