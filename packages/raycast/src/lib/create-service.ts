@@ -22,6 +22,7 @@ export interface CreateTextPoofInput {
   baseUrl: string;
   ttlMs: number;
   revealBudget: number;
+  pin?: string;
   pasteAfterCreate?: boolean;
   requireTurnstile?: boolean;
   allowViewerDelete?: boolean;
@@ -38,6 +39,7 @@ export interface CreateContentPoofInput {
   baseUrl: string;
   ttlMs: number;
   revealBudget: number;
+  pin?: string;
   pasteAfterCreate?: boolean;
   requireTurnstile?: boolean;
   allowViewerDelete?: boolean;
@@ -90,6 +92,7 @@ export async function createContentPoof(
     meta: { ...input.meta, kind },
     ttlMs: input.ttlMs,
     revealBudget: input.revealBudget,
+    pin: input.pin,
     requireTurnstile: input.requireTurnstile,
     allowViewerDelete: input.allowViewerDelete,
     revealAnchored: input.revealAnchored,
