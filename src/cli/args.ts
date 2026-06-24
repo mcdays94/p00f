@@ -1,6 +1,7 @@
 // Pure CLI helpers for the poof CLI (POOF-16). No Node APIs here, so this module
 // is unit-testable in the Workers pool alongside the rest of the suite.
 import { clampTtlMs, clampRevealBudget } from "../shared/limits";
+import { inferCreateKind } from "../shared/create-kind";
 
 export type Command = "create" | "get" | "info" | "burn";
 
@@ -169,11 +170,5 @@ export function inferKind(opts: {
   filename?: string;
   isBinary?: boolean;
 }): string {
-  if (opts.explicit) return opts.explicit;
-  if (opts.mime && opts.mime.startsWith("image/")) return "image";
-  if (opts.mime && opts.mime.startsWith("video/")) return "video";
-  if (opts.mime && opts.mime.startsWith("audio/")) return "audio";
-  if (opts.isBinary) return "file";
-  if (opts.filename) return "file";
-  return "text";
+  return inferCreateKind(opts);
 }

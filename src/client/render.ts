@@ -86,15 +86,7 @@ export function decideRender(meta: ClipMeta, bytes: Uint8Array): RenderDecision 
 // back to escaped-text-in-the-sandbox. The reveal path must never assign an
 // href before this returns a non-null value: a `javascript:` href would run
 // in the key-holding parent origin and exfiltrate the Fragment Key.
-export function safeHttpUrl(s: string): string | null {
-  try {
-    const u = new URL(s);
-    if (u.protocol === "http:" || u.protocol === "https:") return u.href;
-    return null;
-  } catch {
-    return null;
-  }
-}
+export { safeHttpUrl } from "../shared/create-kind";
 
 export function escapeHtml(s: string): string {
   return s.replace(
