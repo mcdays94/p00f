@@ -1,6 +1,8 @@
 import {
   create,
+  inferCreateKind,
   inferTextKind,
+  type ClipMeta,
   type CreatedClip,
   type HttpLike,
 } from "@p00f/core";
@@ -17,6 +19,22 @@ export interface CreateServiceDeps {
 
 export interface CreateTextPoofInput {
   text: string;
+  baseUrl: string;
+  ttlMs: number;
+  revealBudget: number;
+  pasteAfterCreate?: boolean;
+  requireTurnstile?: boolean;
+  allowViewerDelete?: boolean;
+  revealAnchored?: boolean;
+  showCountdown?: boolean;
+}
+
+export interface CreateContentPoofInput {
+  content: Uint8Array;
+  meta: Omit<
+    ClipMeta,
+    "expiresAt" | "ttlMs" | "revealAnchored" | "showCountdown"
+  >;
   baseUrl: string;
   ttlMs: number;
   revealBudget: number;
@@ -47,13 +65,29 @@ export async function createTextPoof(
   input: CreateTextPoofInput,
 ): Promise<CreatedClip> {
   const content = te.encode(input.text);
-  const created = await create(deps.http, input.baseUrl, {
+  return createContentPoof(deps, {
     content,
     meta: {
       kind: inferTextKind(input.text),
       mime: "text/plain",
       size: content.length,
     },
+    ...input,
+  });
+}
+
+export async function createContentPoof(
+  deps: CreateServiceDeps,
+  input: CreateContentPoofInput,
+): Promise<CreatedClip> {
+  const kind = inferCreateKind({
+    explicit: input.meta.kind,
+    mime: input.meta.mime,
+    filename: input.meta.filename,
+  });
+  const created = await create(deps.http, input.baseUrl, {
+    content: input.content,
+    meta: { ...input.meta, kind },
     ttlMs: input.ttlMs,
     revealBudget: input.revealBudget,
     requireTurnstile: input.requireTurnstile,

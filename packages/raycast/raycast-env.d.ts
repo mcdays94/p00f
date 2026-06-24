@@ -34,6 +34,8 @@ declare namespace Preferences {
   export type CreatePoof = ExtensionPreferences & {}
   /** Preferences accessible in the `poof-selection` command */
   export type PoofSelection = ExtensionPreferences & {}
+  /** Preferences accessible in the `poof-clipboard` command */
+  export type PoofClipboard = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -41,5 +43,7 @@ declare namespace Arguments {
   export type CreatePoof = {}
   /** Arguments passed to the `poof-selection` command */
   export type PoofSelection = {}
+  /** Arguments passed to the `poof-clipboard` command */
+  export type PoofClipboard = {}
 }
 

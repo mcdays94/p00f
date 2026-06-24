@@ -36,7 +36,42 @@ export function inferFileKind(opts: { mime?: string; filename?: string }): "imag
   if (opts.mime?.startsWith("image/")) return "image";
   if (opts.mime?.startsWith("video/")) return "video";
   if (opts.mime?.startsWith("audio/")) return "audio";
+  const mime = opts.filename ? guessMimeFromFilename(opts.filename) : undefined;
+  if (mime?.startsWith("image/")) return "image";
+  if (mime?.startsWith("video/")) return "video";
+  if (mime?.startsWith("audio/")) return "audio";
   return "file";
+}
+
+export function guessMimeFromFilename(filename: string): string | undefined {
+  const i = filename.lastIndexOf(".");
+  const ext = i === -1 ? "" : filename.slice(i + 1).toLowerCase();
+  return {
+    txt: "text/plain",
+    md: "text/markdown",
+    json: "application/json",
+    js: "text/javascript",
+    ts: "text/typescript",
+    csv: "text/csv",
+    html: "text/html",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    pdf: "application/pdf",
+    mp4: "video/mp4",
+    m4v: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    mkv: "video/x-matroska",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    flac: "audio/flac",
+  }[ext];
 }
 
 export function inferCreateKind(opts: {

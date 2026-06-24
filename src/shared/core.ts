@@ -5,6 +5,7 @@ export * from "./crypto";
 export * from "./link";
 export * from "./protocol";
 export * from "./create-kind";
+export * from "./limits";
 
 import { generateMasterKey, generateClipId, encryptBlob, decryptBlob } from "./crypto";
 import { buildLink, parseLink } from "./link";

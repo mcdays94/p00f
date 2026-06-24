@@ -28,6 +28,9 @@ describe("shared create-kind policy", () => {
     expect(inferFileKind({ mime: "image/png" })).toBe("image");
     expect(inferFileKind({ mime: "video/mp4" })).toBe("video");
     expect(inferFileKind({ mime: "audio/mpeg" })).toBe("audio");
+    expect(inferFileKind({ filename: "screenshot.png" })).toBe("image");
+    expect(inferFileKind({ filename: "demo.mov" })).toBe("video");
+    expect(inferFileKind({ filename: "voice-memo.wav" })).toBe("audio");
     expect(inferFileKind({ filename: "notes.txt" })).toBe("file");
   });
 

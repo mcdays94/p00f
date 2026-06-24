@@ -5,8 +5,13 @@
   "type": "module",
   "icon": "icon.png",
   "author": "miguel_caetano_dias",
-  "platforms": ["macOS"],
-  "categories": ["Productivity", "Developer Tools"],
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Productivity",
+    "Developer Tools"
+  ],
   "license": "MIT",
   "commands": [
     {
@@ -19,6 +24,12 @@
       "name": "poof-selection",
       "title": "Poof Selection",
       "description": "Create a p00f link from the selected text.",
+      "mode": "no-view"
+    },
+    {
+      "name": "poof-clipboard",
+      "title": "Poof Clipboard",
+      "description": "Create a p00f link from clipboard text or one copied file.",
       "mode": "no-view"
     }
   ],
@@ -39,12 +50,30 @@
       "required": true,
       "default": "300000",
       "data": [
-        { "title": "1 minute", "value": "60000" },
-        { "title": "5 minutes", "value": "300000" },
-        { "title": "1 hour", "value": "3600000" },
-        { "title": "1 day", "value": "86400000" },
-        { "title": "7 days", "value": "604800000" },
-        { "title": "30 days", "value": "2592000000" }
+        {
+          "title": "1 minute",
+          "value": "60000"
+        },
+        {
+          "title": "5 minutes",
+          "value": "300000"
+        },
+        {
+          "title": "1 hour",
+          "value": "3600000"
+        },
+        {
+          "title": "1 day",
+          "value": "86400000"
+        },
+        {
+          "title": "7 days",
+          "value": "604800000"
+        },
+        {
+          "title": "30 days",
+          "value": "2592000000"
+        }
       ]
     },
     {
@@ -55,10 +84,22 @@
       "required": true,
       "default": "1",
       "data": [
-        { "title": "1 Reveal", "value": "1" },
-        { "title": "3 Reveals", "value": "3" },
-        { "title": "10 Reveals", "value": "10" },
-        { "title": "Unlimited until TTL", "value": "-1" }
+        {
+          "title": "1 Reveal",
+          "value": "1"
+        },
+        {
+          "title": "3 Reveals",
+          "value": "3"
+        },
+        {
+          "title": "10 Reveals",
+          "value": "10"
+        },
+        {
+          "title": "Unlimited until TTL",
+          "value": "-1"
+        }
       ]
     },
     {
@@ -117,6 +158,7 @@
     "@raycast/api": "^1.104.20"
   },
   "devDependencies": {
+    "@types/node": "^26.0.0",
     "typescript": "^6.0.3"
   }
 }
