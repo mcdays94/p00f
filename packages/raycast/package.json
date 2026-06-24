@@ -151,7 +151,8 @@
   "scripts": {
     "dev": "npm run build --prefix ../core && ray develop",
     "build": "npm run build --prefix ../core && ray build -e dist",
-    "lint": "ray lint"
+    "lint": "ray lint",
+    "check": "npm run build && npm run lint"
   },
   "dependencies": {
     "@p00f/core": "file:../core",
