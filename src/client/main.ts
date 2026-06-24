@@ -11,7 +11,8 @@ import { buildLink } from "../shared/link";
 import type { ClipMeta } from "../shared/core";
 import { isValidPin, PIN_MIN_LEN, PIN_MAX_LEN } from "../shared/pin";
 import { MAX_CLIP_BYTES, formatBytes, clampTtlMs, clampRevealBudget } from "../shared/limits";
-import { decideRender, buildSandboxMessage, safeHttpUrl, clampHeight, formatRemaining, formatDuration, countdownFraction, type SandboxMessage } from "./render";
+import { inferFileKind, inferTextKind, loneHttpUrl } from "../shared/create-kind";
+import { decideRender, buildSandboxMessage, clampHeight, formatRemaining, formatDuration, countdownFraction, type SandboxMessage } from "./render";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -29,21 +30,6 @@ function formatSize(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function looksLikeCode(s: string): boolean {
-  return /\n/.test(s) && /[;{}<>]|=>|\bfunction\b|\bconst\b|\bdef\b|\bclass\b|\bimport\b|#include/.test(s);
-}
-
-// True when the textarea holds exactly one http(s) URL (a single token, no
-// embedded whitespace). Returns the canonical href so the create flow stores
-// a normalized destination; null means the input is not a lone URL and the
-// "share as masked link" suggestion stays hidden. A bare `host:port` stays
-// text by design (no scheme auto-prepend), per the ADR-0013 brief.
-function loneHttpUrl(s: string): string | null {
-  const t = s.trim();
-  if (!t || /\s/.test(t)) return null;
-  return safeHttpUrl(t);
 }
 
 async function copyText(text: string, btn: HTMLElement) {
@@ -223,13 +209,7 @@ const urlModeOn = () => ($("#url-mode") as HTMLInputElement | null)?.checked ?? 
 async function loadFile(f: File) {
   const buf = new Uint8Array(await f.arrayBuffer());
   const t = f.type;
-  const kind: string = t.startsWith("image/")
-    ? "image"
-    : t.startsWith("video/")
-      ? "video"
-      : t.startsWith("audio/")
-        ? "audio"
-        : "file";
+  const kind = inferFileKind({ mime: t, filename: f.name });
   ($("#text") as HTMLTextAreaElement).value = "";
   setPending(buf, { kind, filename: f.name, mime: f.type || "application/octet-stream", size: buf.length });
 }
@@ -394,7 +374,7 @@ function initCreate() {
       return;
     }
     const bytes = te.encode(v);
-    const kind = secretOn() ? "secret" : looksLikeCode(v) ? "code" : "text";
+    const kind = secretOn() ? "secret" : inferTextKind(v);
     setPending(bytes, { kind, mime: "text/plain", size: bytes.length });
   };
   ta.addEventListener("input", recomputeText);
