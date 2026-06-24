@@ -12,7 +12,27 @@
     "Productivity",
     "Developer Tools"
   ],
+  "keywords": [
+    "p00f",
+    "poof",
+    "zero-knowledge",
+    "ephemeral",
+    "encrypt",
+    "clipboard",
+    "secret",
+    "whisper",
+    "self-destruct",
+    "temporary",
+    "link",
+    "pastebin"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mcdays94/p00f.git",
+    "directory": "packages/raycast"
+  },
+  "homepage": "https://p00f.me",
   "commands": [
     {
       "name": "create-poof",
@@ -152,7 +172,8 @@
     "dev": "npm run build --prefix ../core && ray develop",
     "build": "npm run build --prefix ../core && ray build -e dist",
     "lint": "ray lint",
-    "check": "npm run build && npm run lint"
+    "check": "npm run build && npm run lint",
+    "publish": "npx @raycast/api@latest publish"
   },
   "dependencies": {
     "@p00f/core": "file:../core",
