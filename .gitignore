@@ -15,3 +15,6 @@ poof-issues.html
 AGENTS.md
 DESIGN.md
 CONTEXT.md
+
+# Local-only throwaway design prototypes (kept on disk, not tracked)
+prototypes/
