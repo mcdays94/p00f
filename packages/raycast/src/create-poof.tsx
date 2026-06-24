@@ -6,6 +6,7 @@ import {
   Toast,
   getPreferenceValues,
   open,
+  useNavigation,
   showToast,
 } from "@raycast/api";
 import { readFile, stat } from "node:fs/promises";
@@ -14,11 +15,13 @@ import {
   createDefaultsFromPreferences,
   type PoofPreferences,
 } from "./lib/preferences";
+import { ResultDetail } from "./result-detail";
 
 const http = (input: string, init?: RequestInit) => fetch(input, init);
 
 export default function Command() {
   const preferences = getPreferenceValues<PoofPreferences>();
+  const { push } = useNavigation();
 
   async function onSubmit(values: CreatePoofFormValues) {
     const toast = await showToast({
@@ -40,11 +43,8 @@ export default function Command() {
         values,
       );
       toast.style = Toast.Style.Success;
-      toast.title = preferences.pasteAfterCreate
-        ? "Poof link pasted"
-        : "Poof link copied";
-      toast.message =
-        "Owner token available only in logs for this minimal tracer.";
+      toast.title = "Poof created";
+      push(<ResultDetail created={created} />);
       if (preferences.openInBrowserAfterCreate) await open(created.link);
     } catch (error) {
       toast.style = Toast.Style.Failure;
