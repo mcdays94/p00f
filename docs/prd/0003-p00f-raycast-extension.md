@@ -10,7 +10,7 @@ The Raycast extension should become another thin caller-side shell over `@p00f/c
 
 Build a local-first Raycast extension under `packages/raycast/` with three commands:
 
-1. **Poof Selection**: a no-view quick command that reads selected text from the frontmost app, creates a Poof with preference defaults, copies the Link to the clipboard using Raycast's concealed copy option, and optionally pastes it back into the frontmost app.
+1. **Poof Selection**: a no-view quick command that reads one Finder-selected file when Finder is frontmost, otherwise selected text from the frontmost app, creates a Poof with preference defaults, copies the Link to the clipboard using Raycast's concealed copy option, and optionally pastes it back into the frontmost app.
 2. **Poof Clipboard**: a no-view quick command that reads the clipboard, creates a Poof from one file-like item or text, copies the Link concealed, and optionally pastes it.
 3. **Create Poof...**: a view command with a Raycast Form for text or one file, TTL, Reveal budget, PIN, secret-kind masking, masked URL mode, reveal-anchored TTL, viewer-delete, reveal Turnstile requirement, and countdown preference. On success it shows a Detail screen with actions to copy the Link, paste the Link, copy the owner token, burn now, and open in browser.
 
@@ -19,6 +19,7 @@ Milestone 1 is a local developer extension in this repo. Raycast Store submissio
 ## User Stories
 
 1. As a Raycast user, I want to Poof selected text from any app, so that I can share transient text without opening the browser or terminal.
+2. As a Raycast user, I want to Poof one selected file from Finder, so that selecting an image or document and running Poof Selection shares the file bytes rather than just the filename.
 2. As a Raycast user, I want to Poof my clipboard text, so that I can turn copied content into an expiring Link with one command.
 3. As a Raycast user, I want to Poof a file copied from Finder, so that I can share a file through p00f without using the web dropzone.
 4. As a Raycast user, I want the extension to copy the Poof Link automatically, so that I can paste it into Slack, email, or a document immediately.

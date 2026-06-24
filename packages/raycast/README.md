@@ -7,7 +7,7 @@ This package is Milestone 1 from `docs/prd/0003-p00f-raycast-extension.md`: a lo
 ## Commands
 
 - **Create Poof**: full form for text or one file, TTL, Reveal budget, PIN, secret mode, masked URL mode, reveal-anchored TTL, viewer-delete, reveal captcha, and countdown.
-- **Poof Selection**: quick no-view command that turns selected text into a Poof using preference defaults.
+- **Poof Selection**: quick no-view command that turns selected text or one Finder-selected file into a Poof using preference defaults.
 - **Poof Clipboard**: quick no-view command that turns one clipboard file, text, or HTML-as-text fallback into a Poof using preference defaults.
 
 ## Trust model
@@ -46,6 +46,7 @@ npx vitest run --reporter=verbose
 
 - Run the extension in Raycast development mode.
 - Confirm **Poof Selection** creates a Link from selected text in a real frontmost app.
+- Confirm **Poof Selection** creates a Link from one Finder-selected image file.
 - Confirm **Poof Clipboard** creates a Link from clipboard text.
 - Confirm **Poof Clipboard** creates a Link from one copied file-like clipboard payload.
 - Confirm **Create Poof** creates a Link from form text.

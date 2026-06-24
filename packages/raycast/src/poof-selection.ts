@@ -2,14 +2,16 @@ import {
   Clipboard,
   Toast,
   getPreferenceValues,
+  getSelectedFinderItems,
   getSelectedText,
   showToast,
 } from "@raycast/api";
+import { readFile, stat } from "node:fs/promises";
 import {
   createDefaultsFromPreferences,
   type PoofPreferences,
 } from "./lib/preferences";
-import { createSelectedTextPoof } from "./lib/selection";
+import { createSelectedPoof } from "./lib/selection";
 
 const http = (input: string, init?: RequestInit) => fetch(input, init);
 
@@ -20,8 +22,18 @@ export default async function Command() {
     title: "Creating Poof",
   });
   try {
-    await createSelectedTextPoof(
-      { http, clipboard: Clipboard, getSelectedText },
+    await createSelectedPoof(
+      {
+        http,
+        clipboard: Clipboard,
+        getSelectedText,
+        getSelectedFinderItems,
+        statPath: async (path) => {
+          const s = await stat(path);
+          return { isFile: s.isFile(), isDirectory: s.isDirectory() };
+        },
+        readFile: async (path) => new Uint8Array(await readFile(path)),
+      },
       createDefaultsFromPreferences(preferences),
     );
     toast.style = Toast.Style.Success;
